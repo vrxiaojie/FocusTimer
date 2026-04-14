@@ -1,4 +1,4 @@
-#include "max98357_component.h"
+#include "max98357.h"
 
 #include <stdbool.h>
 #include <stdio.h>
