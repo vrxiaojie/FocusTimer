@@ -2,6 +2,7 @@
 
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_io.h"
+#include "lvgl.h"
 
 extern _lock_t lvgl_api_lock;
 extern lv_display_t *lvgl_display;
