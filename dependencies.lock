@@ -19,6 +19,6 @@ dependencies:
 direct_dependencies:
 - lvgl/lvgl
 - sd_card
-manifest_hash: fe57c0dadfbeefa6af9f4abeaecc28dd361fe73eb13881d62fda53cbbf1c2b75
+manifest_hash: bfe002e78fbf2c011e6229253a1c2d94bfee29f379521292730be5d27da8891a
 target: esp32h2
 version: 2.0.0
