@@ -3,12 +3,14 @@
 #include <sys/lock.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "st7305_2p9.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_io.h"
 #include "lvgl.h"
+#include "spi_shared_lock.h"
 
 #define TAG "lvgl_user"
 #define LVGL_TICK_PERIOD_MS 40
@@ -19,12 +21,15 @@ _lock_t lvgl_api_lock;
 lv_display_t *lvgl_display = NULL;
 static uint8_t panel_buffer[LCD_H_RES * LCD_V_RES / 8];
 static lv_display_rotation_t s_display_rotation = LV_DISPLAY_ROTATION_0;
+static SemaphoreHandle_t s_lcd_flush_done_sem = NULL;
 
 static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t io_panel, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
 {
-    lv_display_t *disp = (lv_display_t *)user_ctx;
-    lv_display_flush_ready(disp);
-    return false;
+    BaseType_t high_task_wakeup = pdFALSE;
+    if (s_lcd_flush_done_sem != NULL) {
+        xSemaphoreGiveFromISR(s_lcd_flush_done_sem, &high_task_wakeup);
+    }
+    return high_task_wakeup == pdTRUE;
 }
 
 static void lvgl_flush_cb_partial(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
@@ -86,7 +91,26 @@ static void lvgl_flush_cb_partial(lv_display_t *disp, const lv_area_t *area, uin
 
     // 这里如果用原 draw_bitmap 局部坐标+动态分配内存，很容易因为 DMA 未结束而 free() 导致全屏崩坏或者 st7305 驱动自身的底层未对准 /12 等 bug
     // 所以配合 LVGL_PARTIAL，底层向屏幕 DMA 传输只发全屏是最完美且没有视觉耗时的方式。
+    if (!spi_shared_lock_take(portMAX_DELAY)) {
+        ESP_LOGE(TAG, "Failed to take shared SPI lock");
+        lv_display_flush_ready(disp);
+        return;
+    }
+
+    if (s_lcd_flush_done_sem != NULL) {
+        (void)xSemaphoreTake(s_lcd_flush_done_sem, 0);
+    }
+
     esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, LCD_H_RES, LCD_V_RES, panel_buffer);
+
+    if (s_lcd_flush_done_sem != NULL) {
+        if (xSemaphoreTake(s_lcd_flush_done_sem, pdMS_TO_TICKS(200)) != pdTRUE) {
+            ESP_LOGW(TAG, "LCD flush timeout");
+        }
+    }
+
+    spi_shared_lock_give();
+    lv_display_flush_ready(disp);
 }
 
 static void increase_lvgl_tick(void *arg)
@@ -127,6 +151,11 @@ void lvgl_user_init(esp_lcd_panel_handle_t panel_handle, esp_lcd_panel_io_handle
 
     ESP_LOGI(TAG, "Initialize LVGL");
     lv_init();
+
+    if (s_lcd_flush_done_sem == NULL) {
+        s_lcd_flush_done_sem = xSemaphoreCreateBinary();
+        assert(s_lcd_flush_done_sem);
+    }
     // create a lvgl display
     lvgl_display = lv_display_create(LCD_H_RES, LCD_V_RES);
     // associate the i2c panel handle to the display

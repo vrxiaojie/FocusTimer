@@ -10,6 +10,7 @@
 #include "driver/spi_common.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
+#include "spi_shared_lock.h"
 
 static const char *TAG = "sdspi_comp";
 
@@ -105,7 +106,6 @@ esp_err_t sdspi_init(sdspi_handle_t *handle)
 
     ret = esp_vfs_fat_sdspi_mount(handle->config.mount_point, &host, &slot_config, &mount_cfg, &handle->card);
     if (ret != ESP_OK) {
-        spi_bus_free(host.slot);
         ESP_LOGE(TAG, "esp_vfs_fat_sdspi_mount failed: %s", esp_err_to_name(ret));
         return ret;
     }
@@ -126,7 +126,6 @@ esp_err_t sdspi_deinit(sdspi_handle_t *handle)
     }
 
     esp_vfs_fat_sdcard_unmount(handle->config.mount_point, handle->card);
-    spi_bus_free(handle->host_slot);
 
     handle->card = NULL;
     handle->mounted = false;
@@ -139,8 +138,13 @@ esp_err_t sdspi_collect_wav_files(const sdspi_handle_t *handle, sdspi_file_list_
         return ESP_ERR_INVALID_ARG;
     }
 
+    if (!spi_shared_lock_take(portMAX_DELAY)) {
+        return ESP_ERR_TIMEOUT;
+    }
+
     DIR *dir = opendir(handle->config.mount_point);
     if (dir == NULL) {
+        spi_shared_lock_give();
         ESP_LOGE(TAG, "Failed to open dir: %s", handle->config.mount_point);
         return ESP_FAIL;
     }
@@ -170,6 +174,7 @@ esp_err_t sdspi_collect_wav_files(const sdspi_handle_t *handle, sdspi_file_list_
     }
 
     closedir(dir);
+    spi_shared_lock_give();
 
     if (out_list->count == 0) {
         return ESP_ERR_NOT_FOUND;

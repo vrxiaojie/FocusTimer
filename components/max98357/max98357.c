@@ -8,6 +8,7 @@
 #include "freertos/FreeRTOS.h"
 
 #include "esp_log.h"
+#include "spi_shared_lock.h"
 
 typedef struct {
     uint16_t audio_format;
@@ -193,8 +194,13 @@ esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
     esp_err_t ret;
     wav_info_t wav = {0};
 
+    if (!spi_shared_lock_take(portMAX_DELAY)) {
+        return ESP_ERR_TIMEOUT;
+    }
+
     FILE *f = fopen(path, "rb");
     if (f == NULL) {
+        spi_shared_lock_give();
         ESP_LOGE(TAG, "Failed to open WAV file: %s", path);
         return ESP_FAIL;
     }
@@ -202,6 +208,7 @@ esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
     ret = s_parse_wav_header(f, &wav);
     if (ret != ESP_OK) {
         fclose(f);
+        spi_shared_lock_give();
         return ret;
     }
 
@@ -211,6 +218,7 @@ esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
     ret = i2s_new_channel(&chan_cfg, &handle->tx_chan, NULL);
     if (ret != ESP_OK) {
         fclose(f);
+        spi_shared_lock_give();
         return ret;
     }
 
@@ -235,6 +243,7 @@ esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
     if (ret != ESP_OK) {
         s_cleanup_tx_channel(handle);
         fclose(f);
+        spi_shared_lock_give();
         return ret;
     }
 
@@ -242,14 +251,18 @@ esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
     if (ret != ESP_OK) {
         s_cleanup_tx_channel(handle);
         fclose(f);
+        spi_shared_lock_give();
         return ret;
     }
 
     if (fseek(f, (long)wav.data_offset, SEEK_SET) != 0) {
         fclose(f);
         s_cleanup_tx_channel(handle);
+        spi_shared_lock_give();
         return ESP_FAIL;
     }
+
+    spi_shared_lock_give();
 
     uint8_t *buffer = malloc(handle->config.stream_buffer_bytes);
     if (buffer == NULL) {
@@ -261,7 +274,17 @@ esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
     uint32_t remaining = wav.data_size;
     while (remaining > 0) {
         size_t req = remaining > handle->config.stream_buffer_bytes ? handle->config.stream_buffer_bytes : remaining;
+
+        if (!spi_shared_lock_take(portMAX_DELAY)) {
+            free(buffer);
+            fclose(f);
+            s_cleanup_tx_channel(handle);
+            return ESP_ERR_TIMEOUT;
+        }
+
         size_t bytes_read = fread(buffer, 1, req, f);
+        spi_shared_lock_give();
+
         if (bytes_read == 0) {
             break;
         }
@@ -288,7 +311,14 @@ esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
     }
 
     free(buffer);
+
+    if (!spi_shared_lock_take(portMAX_DELAY)) {
+        s_cleanup_tx_channel(handle);
+        return ESP_ERR_TIMEOUT;
+    }
+
     fclose(f);
+    spi_shared_lock_give();
 
     s_cleanup_tx_channel(handle);
 

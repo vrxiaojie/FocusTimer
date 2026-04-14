@@ -1,5 +1,5 @@
 idf_component_register(
     SRCS "sdspi.c"
     INCLUDE_DIRS "include"
-    REQUIRES fatfs sd_card
+    REQUIRES fatfs sd_card spi_shared_lock
 )
