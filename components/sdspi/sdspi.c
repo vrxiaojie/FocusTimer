@@ -1,4 +1,4 @@
-#include "sdspi_component.h"
+#include "sdspi.h"
 
 #include <ctype.h>
 #include <dirent.h>
@@ -37,9 +37,6 @@ static int s_compare_paths(const void *a, const void *b)
 static void s_enable_pullups(const sdspi_config_t *cfg)
 {
     gpio_set_pull_mode(cfg->pin_miso, GPIO_PULLUP_ONLY);
-    gpio_set_pull_mode(cfg->pin_mosi, GPIO_PULLUP_ONLY);
-    gpio_set_pull_mode(cfg->pin_clk, GPIO_PULLUP_ONLY);
-    gpio_set_pull_mode(cfg->pin_cs, GPIO_PULLUP_ONLY);
 }
 
 void sdspi_get_default_config(sdspi_config_t *out_config)
@@ -54,7 +51,7 @@ void sdspi_get_default_config(sdspi_config_t *out_config)
         .pin_mosi = 0,
         .pin_clk = 0,
         .pin_cs = 0,
-        .max_freq_khz = 400,
+        .max_freq_khz = 1000,
         .enable_internal_pullups = true,
         .format_if_mount_failed = false,
         .max_open_files = 5,
@@ -76,8 +73,10 @@ esp_err_t sdspi_set_config(sdspi_handle_t *handle, const sdspi_config_t *config)
     return ESP_OK;
 }
 
+// 注意：在调用该函数之前，先使用spi_bus_initialize初始化SPI总线
 esp_err_t sdspi_init(sdspi_handle_t *handle)
 {
+    
     if (handle == NULL || handle->config.mount_point == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -92,21 +91,6 @@ esp_err_t sdspi_init(sdspi_handle_t *handle)
 
     if (handle->config.enable_internal_pullups) {
         s_enable_pullups(&handle->config);
-    }
-
-    spi_bus_config_t bus_cfg = {
-        .mosi_io_num = handle->config.pin_mosi,
-        .miso_io_num = handle->config.pin_miso,
-        .sclk_io_num = handle->config.pin_clk,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-        .max_transfer_sz = 4000,
-    };
-
-    ret = spi_bus_initialize(host.slot, &bus_cfg, SDSPI_DEFAULT_DMA);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "spi_bus_initialize failed: %s", esp_err_to_name(ret));
-        return ret;
     }
 
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();

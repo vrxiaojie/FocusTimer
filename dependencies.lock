@@ -10,8 +10,15 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 9.4.0
+  sd_card:
+    dependencies: []
+    source:
+      path: /home/vrxiaojie/esp/v5.5.2/esp-idf/examples/storage/sd_card/sdmmc/components/sd_card
+      type: local
+    version: '*'
 direct_dependencies:
 - lvgl/lvgl
-manifest_hash: 324d637dc6c36f08f8ad1d149d43175aba8de48403e0919e86eea0c34748b500
+- sd_card
+manifest_hash: fe57c0dadfbeefa6af9f4abeaecc28dd361fe73eb13881d62fda53cbbf1c2b75
 target: esp32h2
 version: 2.0.0
