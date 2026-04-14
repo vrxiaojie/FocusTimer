@@ -7,7 +7,7 @@
 #include "esp_log.h"
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
-
+#include "driver/i2c_master.h"
 #include "esp_lcd_io_spi.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_io.h"
@@ -131,5 +131,23 @@ esp_err_t lcd_screen_init()
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
     // esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
     ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_handle, false)); // 调整反色
+    return ret;
+}
+
+esp_err_t i2c_init()
+{
+    esp_err_t ret = ESP_OK;
+    i2c_master_bus_config_t i2c_mst_config = {
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .i2c_port = I2C_NUM_0,
+        .scl_io_num = I2C_SCL_PIN,
+        .sda_io_num = I2C_SDA_PIN,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = false,
+    };
+
+    i2c_master_bus_handle_t bus_handle;
+    ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_mst_config, &bus_handle));
+
     return ret;
 }

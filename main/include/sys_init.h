@@ -16,3 +16,4 @@ esp_err_t spi_bus_init();
 esp_err_t sdcard_init(sdspi_handle_t *handle);
 esp_err_t audio_init(max98357_handle_t *handle);
 esp_err_t lcd_screen_init();
+esp_err_t i2c_init();
