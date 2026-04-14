@@ -21,6 +21,7 @@ _lock_t lvgl_api_lock;
 lv_display_t *lvgl_display = NULL;
 static uint8_t panel_buffer[LCD_H_RES * LCD_V_RES / 8];
 static SemaphoreHandle_t s_lcd_flush_done_sem = NULL;
+volatile lv_disp_rotation_t display_rotation = LV_DISPLAY_ROTATION_90;
 
 static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t io_panel, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
 {
@@ -37,7 +38,6 @@ static void lvgl_flush_cb_partial(lv_display_t *disp, const lv_area_t *area, uin
     esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t)lv_display_get_user_data(disp);
     int log_width = area->x2 - area->x1 + 1;
     int log_height = area->y2 - area->y1 + 1;
-    lv_display_rotation_t rotation = lv_display_get_rotation(disp);
     lv_draw_buf_t *draw_buf = lv_display_get_buf_active(disp);
     uint32_t stride = (draw_buf) ? draw_buf->header.stride : ((log_width + 7) / 8);
     uint8_t *bitmap = px_map + LVGL_PALETTE_SIZE;
@@ -52,17 +52,17 @@ static void lvgl_flush_cb_partial(lv_display_t *disp, const lv_area_t *area, uin
             int point_phys_x = area->x1 + log_x;
             int point_phys_y = area->y1 + log_y;
 
-            if (rotation == LV_DISPLAY_ROTATION_90)
+            if (display_rotation == LV_DISPLAY_ROTATION_90)
             {
                 point_phys_x = LCD_H_RES - 1 - (area->y1 + log_y);
                 point_phys_y = area->x1 + log_x;
             }
-            else if (rotation == LV_DISPLAY_ROTATION_180)
+            else if (display_rotation == LV_DISPLAY_ROTATION_180)
             {
                 point_phys_x = LCD_H_RES - 1 - (area->x1 + log_x);
                 point_phys_y = LCD_V_RES - 1 - (area->y1 + log_y);
             }
-            else if (rotation == LV_DISPLAY_ROTATION_270)
+            else if (display_rotation == LV_DISPLAY_ROTATION_270)
             {
                 point_phys_x = area->y1 + log_y;
                 point_phys_y = LCD_V_RES - 1 - (area->x1 + log_x);
