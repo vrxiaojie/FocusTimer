@@ -9,8 +9,9 @@
 
 #define TAG "lvgl_indev"
 
-static volatile int16_t encoder_diff = 0;
-static volatile lv_indev_state_t encoder_state = LV_INDEV_STATE_RELEASED;
+static portMUX_TYPE s_enc_lock = portMUX_INITIALIZER_UNLOCKED;
+static int16_t encoder_diff = 0;
+static lv_indev_state_t encoder_state = LV_INDEV_STATE_RELEASED;
 #define MAX_PAGES 10
 #define MAX_ITEMS_PER_PAGE 30
 
@@ -135,21 +136,24 @@ static void screen_tracker_timer_cb(lv_timer_t *timer)
 static void encoder_read(lv_indev_t *indev, lv_indev_data_t *data)
 {
     (void)indev;
+    taskENTER_CRITICAL(&s_enc_lock);
     data->enc_diff = encoder_diff;
     data->state = encoder_state;
     encoder_diff = 0;
+    taskEXIT_CRITICAL(&s_enc_lock);
 }
 
 void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
 {
     (void)user_ctx;
-
+    taskENTER_CRITICAL(&s_enc_lock);
     if (!pressed)
     {
         if (key_index == 1)
         {
             encoder_state = LV_INDEV_STATE_RELEASED;
         }
+        taskEXIT_CRITICAL(&s_enc_lock);
         return;
     }
 
@@ -165,6 +169,7 @@ void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
     {
         encoder_state = LV_INDEV_STATE_PRESSED;
     }
+    taskEXIT_CRITICAL(&s_enc_lock);
 }
 
 void lvgl_indev_init()
