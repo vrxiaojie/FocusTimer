@@ -187,7 +187,7 @@ esp_err_t aw96103_init()
     s_cfg.int_io = TOUCH_INT_PIN;
     s_cfg.i2c_addr = AW96103_I2C_ADDR;
     s_cfg.i2c_clk_hz = 400000;
-    s_cfg.touch_threshold = 500000;
+    s_cfg.touch_threshold = 200000;
     s_cfg.task_stack_size = 4096;
     s_cfg.task_priority = 10;
     s_cfg.scan_period = 50;
