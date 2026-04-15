@@ -19,6 +19,7 @@ static const char *TAG = "AW96103";
 
 // AW96103 register addresses
 #define REG_SCANCTRL0 0x0000
+#define REG_SCANCTRL1 0x0004
 #define REG_AFECFG0_CH0 0x0010
 #define REG_AFECFG0_CH1 0x0024
 #define REG_AFECFG0_CH2 0x0038
@@ -106,6 +107,11 @@ static esp_err_t aw96103_chip_init(void)
     val = (val & ~0x0FFFU) | 0x0707U;
     ESP_RETURN_ON_ERROR(aw96103_write_reg(REG_SCANCTRL0, val), TAG, "write SCANCTRL0 failed");
 
+    // 设置扫描周期和doze mode间隔
+    ESP_RETURN_ON_ERROR(aw96103_read_reg(REG_SCANCTRL1, &val), TAG, "read SCANCTRL1 failed");
+    val = (val & 0xFFFF0000U) | (s_cfg.doze_mode_interval << 11) |(s_cfg.scan_period / 2);
+    ESP_RETURN_ON_ERROR(aw96103_write_reg(REG_SCANCTRL1, val), TAG, "write SCANCTRL1 failed");
+
     ESP_RETURN_ON_ERROR(aw96103_write_reg(REG_CMD, 0x00000001), TAG, "switch to active mode failed");
 
     return ESP_OK;
@@ -182,9 +188,10 @@ esp_err_t aw96103_init()
     s_cfg.i2c_addr = AW96103_I2C_ADDR;
     s_cfg.i2c_clk_hz = 400000;
     s_cfg.touch_threshold = 500000;
-    s_cfg.long_press_threshold_ms = 200;
     s_cfg.task_stack_size = 4096;
     s_cfg.task_priority = 10;
+    s_cfg.scan_period = 50;
+    s_cfg.doze_mode_interval = 1; // 设定为1，实际进入doze mode的时间为1*4=4ms
 
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,

@@ -18,7 +18,8 @@ typedef struct
     uint8_t i2c_addr;
     uint32_t i2c_clk_hz;
     uint32_t touch_threshold;
-    uint32_t long_press_threshold_ms;
+    uint16_t scan_period;
+    uint8_t doze_mode_interval; // 自动进入doze mode的时间间隔，实际时间为 设定值*4 
     uint32_t task_stack_size;
     UBaseType_t task_priority;
 } aw96103_config_t;
