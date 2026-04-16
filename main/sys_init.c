@@ -130,7 +130,7 @@ esp_err_t lcd_screen_init()
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
     // esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
-    ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_handle, false)); // 调整反色
+    ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_handle, true)); // 调整反色
     return ret;
 }
 

@@ -1,8 +1,6 @@
 {
   "files": [
     "actions.h",
-    "eez-flow.cpp",
-    "eez-flow.h",
     "fonts.h",
     "images.c",
     "images.h",
@@ -13,8 +11,8 @@
     "styles.h",
     "ui.c",
     "ui.h",
-    "ui_font_roboto.c",
-    "ui_font_siyuanheiti.c",
+    "ui_font_roboto_condensed_3_100.c",
+    "ui_font_siyuanheiti_20.c",
     "vars.h"
   ]
 }
