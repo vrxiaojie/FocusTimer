@@ -27,6 +27,7 @@ void create_screen_main() {
     objects.main = obj;
     lv_obj_set_pos(obj, 0, 0);
     lv_obj_set_size(obj, 384, 168);
+    lv_obj_add_event_cb(obj, action_main_scr, LV_EVENT_SCREEN_LOADED, (void *)0);
     add_style_screen_style_dark(obj);
     {
         lv_obj_t *parent_obj = obj;

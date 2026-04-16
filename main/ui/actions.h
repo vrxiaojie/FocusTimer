@@ -9,6 +9,7 @@ extern "C" {
 
 extern void action_main_scr_next_page_btn(lv_event_t * e);
 extern void action_submain_scr_prev_page_btn(lv_event_t * e);
+extern void action_main_scr(lv_event_t * e);
 
 #ifdef __cplusplus
 }
