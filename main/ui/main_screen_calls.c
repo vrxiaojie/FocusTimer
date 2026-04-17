@@ -35,9 +35,9 @@ static void update_main_screen_labels(const STCC4_value_t *sensor_value)
 
     (void)snprintf(hour_text, sizeof(hour_text), "%02d", time_info.tm_hour);
     (void)snprintf(minute_text, sizeof(minute_text), "%02d", time_info.tm_min);
-    (void)snprintf(temp_text, sizeof(temp_text), "%.1f", sensor_value->temperature);
-    (void)snprintf(humid_text, sizeof(humid_text), "%.1f", sensor_value->relativeHumidity);
-    (void)snprintf(co2_text, sizeof(co2_text), "%d", sensor_value->co2Concentration);
+    (void)snprintf(temp_text, sizeof(temp_text), "%.1f℃", sensor_value->temperature);
+    (void)snprintf(humid_text, sizeof(humid_text), "%.1f%%", sensor_value->relativeHumidity);
+    (void)snprintf(co2_text, sizeof(co2_text), "%dppm", sensor_value->co2Concentration);
 
     _lock_acquire(&lvgl_api_lock);
     // TODO: 在加入RTC后将此部分改为从RTC获取时间并更新

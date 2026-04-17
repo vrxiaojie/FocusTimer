@@ -83,12 +83,6 @@ void create_screen_main() {
             lv_label_set_text(obj, ":");
         }
         {
-            lv_obj_t *obj = lv_image_create(parent_obj);
-            lv_obj_set_pos(obj, 38, 121);
-            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-            lv_image_set_scale(obj, 128);
-        }
-        {
             // main_scr_temp_value_label
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.main_scr_temp_value_label = obj;
@@ -96,69 +90,47 @@ void create_screen_main() {
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             add_style_label_style(obj);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_label_set_text(obj, "27.3");
-        }
-        {
-            lv_obj_t *obj = lv_image_create(parent_obj);
-            lv_obj_set_pos(obj, 143, 121);
-            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-            lv_image_set_scale(obj, 128);
+            lv_label_set_text(obj, "00.0℃");
         }
         {
             // main_scr_humid_value_label
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.main_scr_humid_value_label = obj;
-            lv_obj_set_pos(obj, 163, 136);
+            lv_obj_set_pos(obj, 156, 136);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             add_style_label_style(obj);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_label_set_text(obj, "58.0");
-        }
-        {
-            lv_obj_t *obj = lv_image_create(parent_obj);
-            lv_obj_set_pos(obj, 255, 121);
-            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-            lv_image_set_scale(obj, 220);
+            lv_label_set_text(obj, "00.0%");
         }
         {
             // main_scr_humid_value_label_1
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.main_scr_humid_value_label_1 = obj;
-            lv_obj_set_pos(obj, 259, 136);
+            lv_obj_set_pos(obj, 255, 136);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             add_style_label_style(obj);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_label_set_text(obj, "400");
+            lv_label_set_text(obj, "0000ppm");
         }
         {
-            // main_scr_temp_unit_label
+            // main_scr_date_value_label
             lv_obj_t *obj = lv_label_create(parent_obj);
-            objects.main_scr_temp_unit_label = obj;
-            lv_obj_set_pos(obj, 101, 137);
+            objects.main_scr_date_value_label = obj;
+            lv_obj_set_pos(obj, 101, 6);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             add_style_label_style(obj);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_label_set_text(obj, "℃");
+            lv_label_set_text(obj, "10月15日");
         }
         {
-            // main_scr_humid_unit_label
+            // main_scr_dayofweek_value_label
             lv_obj_t *obj = lv_label_create(parent_obj);
-            objects.main_scr_humid_unit_label = obj;
-            lv_obj_set_pos(obj, 204, 136);
+            objects.main_scr_dayofweek_value_label = obj;
+            lv_obj_set_pos(obj, 216, 6);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             add_style_label_style(obj);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_label_set_text(obj, "%");
-        }
-        {
-            // main_scr_co2_unit_label
-            lv_obj_t *obj = lv_label_create(parent_obj);
-            objects.main_scr_co2_unit_label = obj;
-            lv_obj_set_pos(obj, 295, 133);
-            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-            add_style_label_style(obj);
-            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_label_set_text(obj, "ppm");
+            lv_label_set_text(obj, "星期一");
         }
     }
     

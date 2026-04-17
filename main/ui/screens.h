@@ -26,9 +26,8 @@ typedef struct _objects_t {
     lv_obj_t *main_scr_temp_value_label;
     lv_obj_t *main_scr_humid_value_label;
     lv_obj_t *main_scr_humid_value_label_1;
-    lv_obj_t *main_scr_temp_unit_label;
-    lv_obj_t *main_scr_humid_unit_label;
-    lv_obj_t *main_scr_co2_unit_label;
+    lv_obj_t *main_scr_date_value_label;
+    lv_obj_t *main_scr_dayofweek_value_label;
     lv_obj_t *submain_scr_prev_page_btn;
 } objects_t;
 
