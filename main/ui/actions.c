@@ -11,6 +11,7 @@
 #include "lvgl_user.h"
 #include "stcc4.h"
 #include "main_screen_calls.h"
+#include "pomodoro_screen_calls.h"
 
 extern esp_lcd_panel_handle_t panel_handle;
 
@@ -78,5 +79,45 @@ void action_submain_scr_enter_setting_btn(lv_event_t *e)
     if (code == LV_EVENT_SHORT_CLICKED)
     {
         lv_screen_load_anim(objects.setting, LV_SCREEN_LOAD_ANIM_OVER_TOP, 200, 0, false);
+    }
+}
+
+void action_pomodoro_scr_start_pause_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        pomodoro_screen_toggle_pause();
+    }
+}
+
+void action_pomodoro_scr_reset_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        pomodoro_screen_reset();
+    }
+}
+
+void action_pomodoro_scr_skip_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        pomodoro_screen_skip();
+    }
+}
+
+void action_pomodoro_scr(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SCREEN_LOAD_START)
+    {
+        pomodoro_screen_start_update_task();
+    }
+    if (code == LV_EVENT_SCREEN_UNLOAD_START)
+    {
+        pomodoro_screen_stop_update_task();
     }
 }

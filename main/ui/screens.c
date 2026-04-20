@@ -239,6 +239,8 @@ void create_screen_pomodoro() {
     objects.pomodoro = obj;
     lv_obj_set_pos(obj, 0, 0);
     lv_obj_set_size(obj, 384, 168);
+    lv_obj_add_event_cb(obj, action_pomodoro_scr, LV_EVENT_SCREEN_LOAD_START, (void *)0);
+    lv_obj_add_event_cb(obj, action_pomodoro_scr, LV_EVENT_SCREEN_UNLOAD_START, (void *)0);
     add_style_screen_style_dark(obj);
     {
         lv_obj_t *parent_obj = obj;
@@ -269,6 +271,7 @@ void create_screen_pomodoro() {
             objects.pomodoro_scr_start_pause_btn = obj;
             lv_obj_set_pos(obj, 333, 14);
             lv_obj_set_size(obj, 40, 40);
+            lv_obj_add_event_cb(obj, action_pomodoro_scr_start_pause_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
@@ -283,11 +286,12 @@ void create_screen_pomodoro() {
             }
         }
         {
-            // pomodoro_reset_pause_btn
+            // pomodoro_scr_reset_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
-            objects.pomodoro_reset_pause_btn = obj;
+            objects.pomodoro_scr_reset_btn = obj;
             lv_obj_set_pos(obj, 333, 64);
             lv_obj_set_size(obj, 40, 40);
+            lv_obj_add_event_cb(obj, action_pomodoro_scr_reset_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
@@ -302,11 +306,12 @@ void create_screen_pomodoro() {
             }
         }
         {
-            // pomodoro_scr_skip_pause_btn
+            // pomodoro_scr_skip_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
-            objects.pomodoro_scr_skip_pause_btn = obj;
+            objects.pomodoro_scr_skip_btn = obj;
             lv_obj_set_pos(obj, 333, 114);
             lv_obj_set_size(obj, 40, 40);
+            lv_obj_add_event_cb(obj, action_pomodoro_scr_skip_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;

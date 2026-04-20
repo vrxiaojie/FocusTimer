@@ -40,8 +40,8 @@ typedef struct _objects_t {
     lv_obj_t *submain_scr_enter_mp3_btn;
     lv_obj_t *pomodoro_scr_prev_page_btn;
     lv_obj_t *pomodoro_scr_start_pause_btn;
-    lv_obj_t *pomodoro_reset_pause_btn;
-    lv_obj_t *pomodoro_scr_skip_pause_btn;
+    lv_obj_t *pomodoro_scr_reset_btn;
+    lv_obj_t *pomodoro_scr_skip_btn;
     lv_obj_t *pomodoro_scr_time_minute_label;
     lv_obj_t *main_scr_time_second_label;
     lv_obj_t *pomodoro_scr_working_status_label;
