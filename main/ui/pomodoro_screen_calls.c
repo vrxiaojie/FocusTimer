@@ -116,8 +116,7 @@ static void pomodoro_hide_timeout_popup_locked(void)
 
 static void update_pomodoro_labels_locked(void)
 {
-    char minute_text[10];
-    char second_text[10];
+    char time_text[10];
     char status_text[16];
     char focus_count_text[8];
     char nap_count_text[8];
@@ -137,24 +136,17 @@ static void update_pomodoro_labels_locked(void)
     pomodoro_state = s_pomodoro_state;
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
-    int minutes = remaining_seconds / 60;
-    int seconds = remaining_seconds % 60;
     total_seconds = (pomodoro_state == POMODORO_STATE_FOCUS ? FOCUS_TIME_MINUTES : REST_TIME_MINUTES) * 60;
     progress_percent = total_seconds > 0 ? (int32_t)((remaining_seconds * 100U) / total_seconds) : 0;
 
-    (void)snprintf(minute_text, sizeof(minute_text), "%02d", minutes);
-    (void)snprintf(second_text, sizeof(second_text), "%02d", seconds);
+    (void)snprintf(time_text, sizeof(time_text), "%02d:%02d", remaining_seconds / 60, remaining_seconds % 60);
     (void)snprintf(status_text, sizeof(status_text), "%s", pomodoro_state == POMODORO_STATE_FOCUS ? "专注中" : "休息中");
     (void)snprintf(focus_count_text, sizeof(focus_count_text), "%02d", focus_count);
     (void)snprintf(nap_count_text, sizeof(nap_count_text), "%02d", nap_count);
 
-    if (objects.pomodoro_scr_time_minute_label != NULL)
+    if (objects.pomodoro_scr_timer_label != NULL)
     {
-        lv_label_set_text(objects.pomodoro_scr_time_minute_label, minute_text);
-    }
-    if (objects.main_scr_time_second_label != NULL)
-    {
-        lv_label_set_text(objects.main_scr_time_second_label, second_text);
+        lv_label_set_text(objects.pomodoro_scr_timer_label, time_text);
     }
     if (objects.pomodoro_scr_working_status_label != NULL)
     {

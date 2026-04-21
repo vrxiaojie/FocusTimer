@@ -26,8 +26,7 @@ typedef struct _objects_t {
     lv_obj_t *setting;
     lv_obj_t *pomodoro;
     lv_obj_t *main_scr_next_page_btn;
-    lv_obj_t *main_scr_time_hour_label;
-    lv_obj_t *main_scr_time_minute_label;
+    lv_obj_t *main_scr_time_label;
     lv_obj_t *main_scr_temp_value_label;
     lv_obj_t *main_scr_humid_value_label;
     lv_obj_t *main_scr_co2_value_label;
@@ -44,8 +43,7 @@ typedef struct _objects_t {
     lv_obj_t *pomodoro_scr_reset_btn;
     lv_obj_t *pomodoro_scr_skip_btn;
     lv_obj_t *pomodoro_scr_arc_progress;
-    lv_obj_t *pomodoro_scr_time_minute_label;
-    lv_obj_t *main_scr_time_second_label;
+    lv_obj_t *pomodoro_scr_timer_label;
     lv_obj_t *pomodoro_scr_working_status_label;
     lv_obj_t *pomodoro_scr_nowtime_label;
     lv_obj_t *pomodoro_scr_nap_cnt;
