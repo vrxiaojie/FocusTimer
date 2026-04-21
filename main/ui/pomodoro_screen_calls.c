@@ -29,9 +29,6 @@ static uint16_t s_remaining_seconds = 25 * 60; // 默认25分钟
 static uint8_t s_focus_count = 0;
 static uint8_t s_nap_count = 0;
 
-// 用于标记状态是否变化，需要更新UI
-static volatile bool s_state_changed = true;
-
 // 默认时间设置
 static const uint8_t FOCUS_TIME_MINUTES = 25;
 static const uint8_t REST_TIME_MINUTES = 5;
@@ -94,28 +91,16 @@ static void update_pomodoro_labels(void)
             }
         }
     }
-
     _lock_release(&lvgl_api_lock);
-
-    s_state_changed = false;
 }
 
 static void pomodoro_screen_update_task(void *arg)
 {
     (void)arg;
-
-    // 延迟启动，等待屏幕动画完成
-    vTaskDelay(pdMS_TO_TICKS(300));
-
-    // 首次更新显示
     update_pomodoro_labels();
-
-    TickType_t last_wake_time = xTaskGetTickCount();
 
     while (1)
     {
-        bool need_update = false;
-
         if (!s_is_paused)
         {
             if (s_remaining_seconds > 0)
@@ -138,16 +123,10 @@ static void pomodoro_screen_update_task(void *arg)
                     s_remaining_seconds = FOCUS_TIME_MINUTES * 60;
                 }
             }
-            need_update = true;
         }
 
-        // 如果状态有变化或者时间在走，更新UI
-        if (need_update || s_state_changed)
-        {
-            update_pomodoro_labels();
-        }
-
-        xTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(POMODORO_SCREEN_UPDATE_MS));
+        update_pomodoro_labels();
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(POMODORO_SCREEN_UPDATE_MS));
     }
 }
 
@@ -180,7 +159,7 @@ void pomodoro_screen_stop_update_task(void)
 void pomodoro_screen_toggle_pause(void)
 {
     s_is_paused = !s_is_paused;
-    s_state_changed = true;
+    xTaskNotifyGive(s_pomodoro_screen_update_task_handle);
     ESP_LOGI(TAG, "Pomodoro %s", s_is_paused ? "paused" : "resumed");
 }
 
@@ -195,7 +174,7 @@ void pomodoro_screen_reset(void)
     {
         s_remaining_seconds = REST_TIME_MINUTES * 60;
     }
-    s_state_changed = true;
+    xTaskNotifyGive(s_pomodoro_screen_update_task_handle);
     ESP_LOGI(TAG, "Pomodoro reset");
 }
 
@@ -215,6 +194,6 @@ void pomodoro_screen_skip(void)
         s_remaining_seconds = FOCUS_TIME_MINUTES * 60;
     }
     s_is_paused = true;
-    s_state_changed = true;
+    xTaskNotifyGive(s_pomodoro_screen_update_task_handle);
     ESP_LOGI(TAG, "Pomodoro skipped to next state");
 }
