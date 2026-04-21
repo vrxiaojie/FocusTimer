@@ -168,9 +168,9 @@ static void update_pomodoro_labels_locked(void)
     {
         lv_label_set_text(objects.pomodoro_scr_nap_cnt, nap_count_text);
     }
-    if (objects.pomodoro_scr_progress != NULL)
+    if (objects.pomodoro_scr_arc_progress != NULL)
     {
-        lv_slider_set_value(objects.pomodoro_scr_progress, progress_percent, LV_ANIM_OFF);
+        lv_arc_set_value(objects.pomodoro_scr_arc_progress, progress_percent);
     }
 
     // 更新开始/暂停按钮的图标

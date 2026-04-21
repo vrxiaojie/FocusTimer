@@ -44,6 +44,13 @@ lv_style_t *get_style_progress_bar_style_KNOB_DEFAULT();
 void add_style_progress_bar_style(lv_obj_t *obj);
 void remove_style_progress_bar_style(lv_obj_t *obj);
 
+// Style: arc
+lv_style_t *get_style_arc_INDICATOR_DEFAULT();
+lv_style_t *get_style_arc_KNOB_DEFAULT();
+lv_style_t *get_style_arc_MAIN_DEFAULT();
+void add_style_arc(lv_obj_t *obj);
+void remove_style_arc(lv_obj_t *obj);
+
 #ifdef __cplusplus
 }
 #endif
