@@ -41,6 +41,11 @@ static const uint8_t REST_TIME_MINUTES = 5;
 
 static portMUX_TYPE s_pomodoro_lock = portMUX_INITIALIZER_UNLOCKED;
 
+static void pomodoro_play_timeout_audio_todo(void)
+{
+    // TODO: 接入音频播放 API，在倒计时结束时播放提示音。
+}
+
 static void pomodoro_notify_ui_task(void)
 {
     if (s_pomodoro_screen_update_task_handle != NULL)
@@ -172,6 +177,7 @@ static void pomodoro_countdown_timer_cb(void *arg)
 
         if (s_remaining_seconds == 0)
         {
+            pomodoro_play_timeout_audio_todo();
             s_waiting_transition_confirm = true;
             s_is_paused = true;
             s_timeout_message_pending = true;

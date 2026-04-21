@@ -9,3 +9,4 @@ void message_screen_set_confirm_callback(message_screen_confirm_cb_t cb, void *u
 void message_screen_show(void);
 void message_screen_show_with_text(const char *title, const char *content, const char *button_text);
 void message_screen_handle_ok(void);
+bool message_screen_is_modal_active(void);

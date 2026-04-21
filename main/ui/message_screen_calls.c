@@ -6,6 +6,7 @@
 static lv_obj_t *s_previous_screen = NULL;
 static message_screen_confirm_cb_t s_confirm_cb = NULL;
 static void *s_confirm_cb_user_data = NULL;
+static bool s_is_modal_active = false;
 
 static lv_obj_t *message_button_label(void)
 {
@@ -58,6 +59,7 @@ void message_screen_show(void)
 
 	if (objects.message != NULL)
 	{
+		s_is_modal_active = true;
 		lv_screen_load_anim(objects.message, LV_SCREEN_LOAD_ANIM_FADE_ON, 120, 0, false);
 	}
 }
@@ -88,8 +90,15 @@ void message_screen_handle_ok(void)
 
 	if (target != NULL)
 	{
-		lv_screen_load_anim(target, LV_SCREEN_LOAD_ANIM_FADE_ON, 120, 0, false);
+		lv_screen_load(target);
+		// lv_screen_load_anim(target, LV_SCREEN_LOAD_ANIM_FADE_ON, 120, 0, false);
 	}
 
+	s_is_modal_active = false;
 	s_previous_screen = NULL;
+}
+
+bool message_screen_is_modal_active(void)
+{
+	return s_is_modal_active;
 }
