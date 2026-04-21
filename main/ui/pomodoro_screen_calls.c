@@ -126,6 +126,8 @@ static void update_pomodoro_labels_locked(void)
     uint8_t nap_count;
     bool is_paused;
     pomodoro_state_t pomodoro_state;
+    uint16_t total_seconds;
+    int32_t progress_percent;
 
     portENTER_CRITICAL(&s_pomodoro_lock);
     remaining_seconds = s_remaining_seconds;
@@ -137,6 +139,8 @@ static void update_pomodoro_labels_locked(void)
 
     int minutes = remaining_seconds / 60;
     int seconds = remaining_seconds % 60;
+    total_seconds = (pomodoro_state == POMODORO_STATE_FOCUS ? FOCUS_TIME_MINUTES : REST_TIME_MINUTES) * 60;
+    progress_percent = total_seconds > 0 ? (int32_t)((remaining_seconds * 100U) / total_seconds) : 0;
 
     (void)snprintf(minute_text, sizeof(minute_text), "%02d", minutes);
     (void)snprintf(second_text, sizeof(second_text), "%02d", seconds);
@@ -163,6 +167,10 @@ static void update_pomodoro_labels_locked(void)
     if (objects.pomodoro_scr_nap_cnt != NULL)
     {
         lv_label_set_text(objects.pomodoro_scr_nap_cnt, nap_count_text);
+    }
+    if (objects.pomodoro_scr_progress != NULL)
+    {
+        lv_slider_set_value(objects.pomodoro_scr_progress, progress_percent, LV_ANIM_OFF);
     }
 
     // 更新开始/暂停按钮的图标

@@ -48,6 +48,7 @@ typedef struct _objects_t {
     lv_obj_t *pomodoro_scr_nowtime_label;
     lv_obj_t *pomodoro_scr_nap_cnt;
     lv_obj_t *pomodoro_scr_focus_cnt;
+    lv_obj_t *pomodoro_scr_progress;
     lv_obj_t *mp3_scr_prev_page_btn;
     lv_obj_t *mp3_scr_prev_page_btn_1;
 } objects_t;

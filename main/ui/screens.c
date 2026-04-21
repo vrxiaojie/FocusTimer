@@ -357,7 +357,7 @@ void create_screen_pomodoro() {
             // pomodoro_scr_working_status_label
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.pomodoro_scr_working_status_label = obj;
-            lv_obj_set_pos(obj, 160, 136);
+            lv_obj_set_pos(obj, 160, 142);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             add_style_label_style(obj);
             lv_obj_set_style_text_letter_space(obj, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -406,6 +406,16 @@ void create_screen_pomodoro() {
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             add_style_label_style(obj);
             lv_label_set_text(obj, "00");
+        }
+        {
+            // pomodoro_scr_progress
+            lv_obj_t *obj = lv_slider_create(parent_obj);
+            objects.pomodoro_scr_progress = obj;
+            lv_obj_set_pos(obj, 83, 134);
+            lv_obj_set_size(obj, 219, 5);
+            lv_obj_remove_flag(obj, LV_OBJ_FLAG_CLICKABLE|LV_OBJ_FLAG_CLICK_FOCUSABLE);
+            add_style_progress_bar_style(obj);
+            lv_obj_set_style_border_width(obj, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
         }
     }
     
