@@ -15,7 +15,7 @@
 
 extern esp_lcd_panel_handle_t panel_handle;
 
-void action_main_scr_next_page_btn(lv_event_t *e)
+void action_goto_submain_btn(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SHORT_CLICKED)
@@ -24,7 +24,7 @@ void action_main_scr_next_page_btn(lv_event_t *e)
     }
 }
 
-void action_submain_scr_prev_page_btn(lv_event_t *e)
+void action_back_to_main_btn(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SHORT_CLICKED)
@@ -46,21 +46,12 @@ void action_main_scr(lv_event_t *e)
     }
 }
 
-void action_back_to_sub_main_btn(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_SHORT_CLICKED)
-    {
-        lv_screen_load_anim(objects.sub_main, LV_SCREEN_LOAD_ANIM_OVER_BOTTOM, 200, 0, false);
-    }
-}
-
 void action_submain_scr_enter_pomodoro_btn(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SHORT_CLICKED)
     {
-        lv_screen_load_anim(objects.pomodoro, LV_SCREEN_LOAD_ANIM_OVER_TOP, 200, 0, false);
+        lv_screen_load_anim(objects.pomodoro, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
     }
 }
 
@@ -69,7 +60,7 @@ void action_submain_scr_enter_mp3_btn(lv_event_t *e)
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SHORT_CLICKED)
     {
-        lv_screen_load_anim(objects.mp3, LV_SCREEN_LOAD_ANIM_OVER_TOP, 200, 0, false);
+        lv_screen_load_anim(objects.mp3, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
     }
 }
 
@@ -78,7 +69,7 @@ void action_submain_scr_enter_setting_btn(lv_event_t *e)
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SHORT_CLICKED)
     {
-        lv_screen_load_anim(objects.setting, LV_SCREEN_LOAD_ANIM_OVER_TOP, 200, 0, false);
+        lv_screen_load_anim(objects.setting, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
     }
 }
 

@@ -32,12 +32,12 @@ void create_screen_main() {
     {
         lv_obj_t *parent_obj = obj;
         {
-            // main_scr_next_page_btn
+            // main_scr_goto_submain_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
-            objects.main_scr_next_page_btn = obj;
+            objects.main_scr_goto_submain_btn = obj;
             lv_obj_set_pos(obj, 350, 64);
             lv_obj_set_size(obj, 30, 40);
-            lv_obj_add_event_cb(obj, action_main_scr_next_page_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_goto_submain_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
@@ -130,12 +130,12 @@ void create_screen_sub_main() {
     {
         lv_obj_t *parent_obj = obj;
         {
-            // submain_scr_prev_page_btn
+            // submain_back_to_main_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
-            objects.submain_scr_prev_page_btn = obj;
+            objects.submain_back_to_main_btn = obj;
             lv_obj_set_pos(obj, 4, 64);
             lv_obj_set_size(obj, 30, 40);
-            lv_obj_add_event_cb(obj, action_submain_scr_prev_page_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
@@ -220,17 +220,17 @@ void create_screen_mp3() {
     objects.mp3 = obj;
     lv_obj_set_pos(obj, 0, 0);
     lv_obj_set_size(obj, 384, 168);
-    lv_obj_add_event_cb(obj, action_back_to_sub_main_btn, LV_EVENT_PRESSED, (void *)0);
+    lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_PRESSED, (void *)0);
     add_style_screen_style_dark(obj);
     {
         lv_obj_t *parent_obj = obj;
         {
-            // mp3_scr_prev_page_btn
+            // mp3_scr_back_to_main_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
-            objects.mp3_scr_prev_page_btn = obj;
+            objects.mp3_scr_back_to_main_btn = obj;
             lv_obj_set_pos(obj, 6, 5);
             lv_obj_set_size(obj, 38, 29);
-            lv_obj_add_event_cb(obj, action_back_to_sub_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
@@ -258,16 +258,17 @@ void create_screen_setting() {
     objects.setting = obj;
     lv_obj_set_pos(obj, 0, 0);
     lv_obj_set_size(obj, 384, 168);
+    lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_PRESSED, (void *)0);
     add_style_screen_style_dark(obj);
     {
         lv_obj_t *parent_obj = obj;
         {
-            // setting_scr_prev_page_btn
+            // setting_scr_back_to_main_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
-            objects.setting_scr_prev_page_btn = obj;
+            objects.setting_scr_back_to_main_btn = obj;
             lv_obj_set_pos(obj, 11, 11);
             lv_obj_set_size(obj, 38, 29);
-            lv_obj_add_event_cb(obj, action_back_to_sub_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
@@ -301,12 +302,12 @@ void create_screen_pomodoro() {
     {
         lv_obj_t *parent_obj = obj;
         {
-            // pomodoro_scr_prev_page_btn
+            // pomodoro_back_to_main_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
-            objects.pomodoro_scr_prev_page_btn = obj;
+            objects.pomodoro_back_to_main_btn = obj;
             lv_obj_set_pos(obj, 6, 5);
             lv_obj_set_size(obj, 38, 29);
-            lv_obj_add_event_cb(obj, action_back_to_sub_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
