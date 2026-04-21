@@ -17,6 +17,7 @@ extern void action_pomodoro_scr(lv_event_t * e);
 extern void action_pomodoro_scr_start_pause_btn(lv_event_t * e);
 extern void action_pomodoro_scr_reset_btn(lv_event_t * e);
 extern void action_pomodoro_scr_skip_btn(lv_event_t * e);
+extern void action_message_scr_btn(lv_event_t * e);
 
 #ifdef __cplusplus
 }

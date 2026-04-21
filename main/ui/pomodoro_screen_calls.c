@@ -9,15 +9,15 @@
 
 #include "lvgl_user.h"
 #include "screens.h"
-#include "fonts.h"
+#include "message_screen_calls.h"
 #include "pomodoro_screen_calls.h"
 
 #define POMODORO_SCREEN_UPDATE_MS 1000
-#define POMODORO_TIMEOUT_POPUP_AUTO_CLOSE_TICKS 3
 
 static const char *TAG = "pomodoro_screen";
 static TaskHandle_t s_pomodoro_screen_update_task_handle = NULL;
 static esp_timer_handle_t s_pomodoro_countdown_timer_handle = NULL;
+static bool s_update_task_exit_requested = false;
 
 // 番茄钟状态
 typedef enum
@@ -33,18 +33,13 @@ static uint16_t s_remaining_seconds = 25 * 60; // 默认25分钟
 static uint8_t s_focus_count = 0;
 static uint8_t s_nap_count = 0;
 static bool s_waiting_transition_confirm = false;
-static uint8_t s_popup_auto_close_ticks = 0;
-
-static lv_obj_t *s_timeout_popup = NULL;
+static bool s_timeout_message_pending = false;
 
 // 默认时间设置
 static const uint8_t FOCUS_TIME_MINUTES = 25;
 static const uint8_t REST_TIME_MINUTES = 5;
 
 static portMUX_TYPE s_pomodoro_lock = portMUX_INITIALIZER_UNLOCKED;
-
-static void pomodoro_show_timeout_popup_locked(void);
-static void pomodoro_hide_timeout_popup_locked(void);
 
 static void pomodoro_notify_ui_task(void)
 {
@@ -76,42 +71,18 @@ static void pomodoro_go_to_next_stage(bool increase_counter)
     }
 }
 
-static void pomodoro_show_timeout_popup_locked(void)
+static void pomodoro_timeout_message_confirm_cb(void *user_data)
 {
-    if (s_timeout_popup != NULL)
-    {
-        lv_obj_clear_flag(s_timeout_popup, LV_OBJ_FLAG_HIDDEN);
-        return;
-    }
+    (void)user_data;
 
-    lv_obj_t *parent = objects.pomodoro != NULL ? objects.pomodoro : lv_screen_active();
-    s_timeout_popup = lv_obj_create(parent);
-    lv_obj_set_size(s_timeout_popup, 250, 150);
-    lv_obj_center(s_timeout_popup);
-    lv_obj_set_style_radius(s_timeout_popup, 12, LV_PART_MAIN | LV_STATE_DEFAULT);
+    portENTER_CRITICAL(&s_pomodoro_lock);
+    pomodoro_go_to_next_stage(true);
+    s_waiting_transition_confirm = false;
+    s_timeout_message_pending = false;
+    s_is_paused = true;
+    portEXIT_CRITICAL(&s_pomodoro_lock);
 
-    lv_obj_t *title_label = lv_label_create(s_timeout_popup);
-    lv_label_set_text(title_label, "时间到");
-    lv_obj_set_style_text_font(title_label, &ui_font_siyuanheiti_20, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 12);
-
-    lv_obj_t *msg_label = lv_label_create(s_timeout_popup);
-    char tmp[36];
-    sprintf(tmp, "3秒后自动进入\n%s时间", s_pomodoro_state == POMODORO_STATE_FOCUS ? "休息" : "专注");
-    lv_label_set_text(msg_label, tmp);
-    lv_obj_set_width(msg_label, 250 - 20);
-    lv_obj_set_style_text_align(msg_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(msg_label, &ui_font_siyuanheiti_20, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_align(msg_label, LV_ALIGN_CENTER, 0, 20);
-}
-
-static void pomodoro_hide_timeout_popup_locked(void)
-{
-    if (s_timeout_popup != NULL)
-    {
-        lv_obj_del(s_timeout_popup);
-        s_timeout_popup = NULL;
-    }
+    pomodoro_notify_ui_task();
 }
 
 static void update_pomodoro_labels_locked(void)
@@ -203,23 +174,7 @@ static void pomodoro_countdown_timer_cb(void *arg)
         {
             s_waiting_transition_confirm = true;
             s_is_paused = true;
-            s_popup_auto_close_ticks = POMODORO_TIMEOUT_POPUP_AUTO_CLOSE_TICKS;
-            should_notify_ui = true;
-        }
-    }
-    else if (s_waiting_transition_confirm)
-    {
-        if (s_popup_auto_close_ticks > 0)
-        {
-            s_popup_auto_close_ticks--;
-            should_notify_ui = true;
-        }
-
-        if (s_popup_auto_close_ticks == 0)
-        {
-            pomodoro_go_to_next_stage(true);
-            s_waiting_transition_confirm = false;
-            s_is_paused = true;
+            s_timeout_message_pending = true;
             should_notify_ui = true;
         }
     }
@@ -238,24 +193,50 @@ static void pomodoro_screen_update_task(void *arg)
 
     while (1)
     {
+        if (s_update_task_exit_requested)
+        {
+            break;
+        }
+
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
+        if (s_update_task_exit_requested)
+        {
+            break;
+        }
+
+        bool show_timeout_message = false;
+        pomodoro_state_t state_before_transition = POMODORO_STATE_FOCUS;
+        char message_content[48];
+
         portENTER_CRITICAL(&s_pomodoro_lock);
-        bool waiting_transition_confirm = s_waiting_transition_confirm;
+        if (s_timeout_message_pending)
+        {
+            show_timeout_message = true;
+            state_before_transition = s_pomodoro_state;
+            s_timeout_message_pending = false;
+        }
         portEXIT_CRITICAL(&s_pomodoro_lock);
 
+        if (show_timeout_message)
+        {
+            (void)snprintf(message_content,
+                           sizeof(message_content),
+                           "点击OK进入%s时间",
+                           state_before_transition == POMODORO_STATE_FOCUS ? "休息" : "专注");
+        }
+
         _lock_acquire(&lvgl_api_lock);
-        if (waiting_transition_confirm)
-        {
-            pomodoro_show_timeout_popup_locked();
-        }
-        else
-        {
-            pomodoro_hide_timeout_popup_locked();
-        }
         update_pomodoro_labels_locked();
+        if (show_timeout_message)
+        {
+            message_screen_set_confirm_callback(pomodoro_timeout_message_confirm_cb, NULL);
+            message_screen_show_with_text("时间到", message_content, "OK");
+        }
         _lock_release(&lvgl_api_lock);
     }
+
+    vTaskDelete(NULL);
 }
 
 void pomodoro_screen_start_update_task(void)
@@ -264,6 +245,8 @@ void pomodoro_screen_start_update_task(void)
     {
         return;
     }
+
+    s_update_task_exit_requested = false;
 
     BaseType_t task_created = xTaskCreate(pomodoro_screen_update_task,
                                           "pomodoro_screen_update",
@@ -315,16 +298,18 @@ void pomodoro_screen_stop_update_task(void)
 
     if (s_pomodoro_screen_update_task_handle != NULL)
     {
-        vTaskDelete(s_pomodoro_screen_update_task_handle);
-        s_pomodoro_screen_update_task_handle = NULL;
+        TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
+        if (current_task == s_pomodoro_screen_update_task_handle)
+        {
+            s_update_task_exit_requested = true;
+            s_pomodoro_screen_update_task_handle = NULL;
+        }
+        else
+        {
+            vTaskDelete(s_pomodoro_screen_update_task_handle);
+            s_pomodoro_screen_update_task_handle = NULL;
+        }
     }
-
-    pomodoro_hide_timeout_popup_locked();
-
-    portENTER_CRITICAL(&s_pomodoro_lock);
-    s_waiting_transition_confirm = false;
-    s_popup_auto_close_ticks = 0;
-    portEXIT_CRITICAL(&s_pomodoro_lock);
 
     ESP_LOGI(TAG, "Pomodoro screen update task stopped");
 }
@@ -351,7 +336,7 @@ void pomodoro_screen_reset(void)
     portENTER_CRITICAL(&s_pomodoro_lock);
     s_is_paused = true;
     s_waiting_transition_confirm = false;
-    s_popup_auto_close_ticks = 0;
+    s_timeout_message_pending = false;
     if (s_pomodoro_state == POMODORO_STATE_FOCUS)
     {
         s_remaining_seconds = FOCUS_TIME_MINUTES * 60;
@@ -372,7 +357,7 @@ void pomodoro_screen_skip(void)
     pomodoro_go_to_next_stage(true);
     s_is_paused = true;
     s_waiting_transition_confirm = false;
-    s_popup_auto_close_ticks = 0;
+    s_timeout_message_pending = false;
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
     pomodoro_notify_ui_task();

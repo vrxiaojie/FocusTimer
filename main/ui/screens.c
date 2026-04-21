@@ -494,6 +494,62 @@ void create_screen_pomodoro() {
 void tick_screen_pomodoro() {
 }
 
+void create_screen_message() {
+    lv_obj_t *obj = lv_obj_create(0);
+    objects.message = obj;
+    lv_obj_set_pos(obj, 0, 0);
+    lv_obj_set_size(obj, 384, 168);
+    add_style_screen_style_dark(obj);
+    {
+        lv_obj_t *parent_obj = obj;
+        {
+            // message_scr_content_label
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.message_scr_content_label = obj;
+            lv_obj_set_pos(obj, 82, 33);
+            lv_obj_set_size(obj, 221, 80);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "content1\ncontent2\ncontent3");
+        }
+        {
+            // message_scr_title_label
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.message_scr_title_label = obj;
+            lv_obj_set_pos(obj, 97, 5);
+            lv_obj_set_size(obj, 191, 23);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "title");
+        }
+        {
+            // message_scr_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.message_scr_btn = obj;
+            lv_obj_set_pos(obj, 143, 120);
+            lv_obj_set_size(obj, 100, 35);
+            lv_obj_add_event_cb(obj, action_message_scr_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, 0, 0);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "OK");
+                }
+            }
+        }
+    }
+    
+    tick_screen_message();
+}
+
+void tick_screen_message() {
+}
+
 typedef void (*tick_screen_func_t)();
 tick_screen_func_t tick_screen_funcs[] = {
     tick_screen_main,
@@ -501,6 +557,7 @@ tick_screen_func_t tick_screen_funcs[] = {
     tick_screen_mp3,
     tick_screen_setting,
     tick_screen_pomodoro,
+    tick_screen_message,
 };
 void tick_screen(int screen_index) {
     tick_screen_funcs[screen_index]();
@@ -608,4 +665,5 @@ void create_screens() {
     create_screen_mp3();
     create_screen_setting();
     create_screen_pomodoro();
+    create_screen_message();
 }

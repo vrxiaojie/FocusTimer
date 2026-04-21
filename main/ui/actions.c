@@ -12,6 +12,7 @@
 #include "stcc4.h"
 #include "main_screen_calls.h"
 #include "pomodoro_screen_calls.h"
+#include "message_screen_calls.h"
 
 extern esp_lcd_panel_handle_t panel_handle;
 
@@ -110,5 +111,14 @@ void action_pomodoro_scr(lv_event_t *e)
     if (code == LV_EVENT_SCREEN_UNLOAD_START)
     {
         pomodoro_screen_stop_update_task();
+    }
+}
+
+void action_message_scr_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        message_screen_handle_ok();
     }
 }

@@ -16,7 +16,8 @@ enum ScreensEnum {
     SCREEN_ID_MP3 = 3,
     SCREEN_ID_SETTING = 4,
     SCREEN_ID_POMODORO = 5,
-    _SCREEN_ID_LAST = 5
+    SCREEN_ID_MESSAGE = 6,
+    _SCREEN_ID_LAST = 6
 };
 
 typedef struct _objects_t {
@@ -25,6 +26,7 @@ typedef struct _objects_t {
     lv_obj_t *mp3;
     lv_obj_t *setting;
     lv_obj_t *pomodoro;
+    lv_obj_t *message;
     lv_obj_t *main_scr_goto_submain_btn;
     lv_obj_t *main_scr_time_label;
     lv_obj_t *main_scr_temp_value_label;
@@ -48,6 +50,9 @@ typedef struct _objects_t {
     lv_obj_t *pomodoro_scr_nowtime_label;
     lv_obj_t *pomodoro_scr_nap_cnt;
     lv_obj_t *pomodoro_scr_focus_cnt;
+    lv_obj_t *message_scr_content_label;
+    lv_obj_t *message_scr_title_label;
+    lv_obj_t *message_scr_btn;
 } objects_t;
 
 extern objects_t objects;
@@ -66,6 +71,9 @@ void tick_screen_setting();
 
 void create_screen_pomodoro();
 void tick_screen_pomodoro();
+
+void create_screen_message();
+void tick_screen_message();
 
 void tick_screen_by_id(enum ScreensEnum screenId);
 void tick_screen(int screen_index);
