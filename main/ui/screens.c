@@ -73,9 +73,7 @@ void create_screen_main() {
             lv_label_set_text(obj, "00");
         }
         {
-            // main_scr_time_minute_label_1
             lv_obj_t *obj = lv_label_create(parent_obj);
-            objects.main_scr_time_minute_label_1 = obj;
             lv_obj_set_pos(obj, 174, 32);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             add_style_label_style(obj);
@@ -103,9 +101,9 @@ void create_screen_main() {
             lv_label_set_text(obj, "00.0%");
         }
         {
-            // main_scr_humid_value_label_1
+            // main_scr_co2_value_label
             lv_obj_t *obj = lv_label_create(parent_obj);
-            objects.main_scr_humid_value_label_1 = obj;
+            objects.main_scr_co2_value_label = obj;
             lv_obj_set_pos(obj, 255, 136);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             add_style_label_style(obj);
@@ -281,9 +279,9 @@ void create_screen_setting() {
     {
         lv_obj_t *parent_obj = obj;
         {
-            // mp3_scr_prev_page_btn_1
+            // setting_scr_prev_page_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
-            objects.mp3_scr_prev_page_btn_1 = obj;
+            objects.setting_scr_prev_page_btn = obj;
             lv_obj_set_pos(obj, 11, 11);
             lv_obj_set_size(obj, 38, 29);
             lv_obj_add_event_cb(obj, action_back_to_sub_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);

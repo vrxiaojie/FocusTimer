@@ -57,9 +57,9 @@ static void update_main_screen_labels(const STCC4_value_t *sensor_value)
     {
         lv_label_set_text(objects.main_scr_humid_value_label, humid_text);
     }
-    if (objects.main_scr_humid_value_label_1 != NULL)
+    if (objects.main_scr_co2_value_label != NULL)
     {
-        lv_label_set_text(objects.main_scr_humid_value_label_1, co2_text);
+        lv_label_set_text(objects.main_scr_co2_value_label, co2_text);
     }
     _lock_release(&lvgl_api_lock);
 }
