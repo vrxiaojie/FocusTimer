@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "esp_err.h"
@@ -33,6 +34,8 @@ esp_err_t max98357_set_config(max98357_handle_t *handle, const max98357_config_t
 esp_err_t max98357_init(max98357_handle_t *handle);
 
 esp_err_t max98357_deinit(max98357_handle_t *handle);
+
+esp_err_t max98357_set_enabled(max98357_handle_t *handle, bool enable);
 
 esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path);
 

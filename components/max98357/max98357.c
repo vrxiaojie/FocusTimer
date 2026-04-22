@@ -7,7 +7,9 @@
 
 #include "freertos/FreeRTOS.h"
 
+#include "driver/gpio.h"
 #include "esp_log.h"
+#include "pinmap.h"
 #include "spi_shared_lock.h"
 
 typedef struct {
@@ -29,6 +31,18 @@ typedef struct {
 } __attribute__((packed)) wav_chunk_header_t;
 
 static const char *TAG = "max98357";
+
+static esp_err_t s_config_power_pin(void)
+{
+    gpio_config_t io_conf = {
+        .pin_bit_mask = 1ULL << AUDIO_SD,
+        .mode = GPIO_MODE_OUTPUT_OD,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    return gpio_config(&io_conf);
+}
 
 static void s_cleanup_tx_channel(max98357_handle_t *handle)
 {
@@ -169,6 +183,17 @@ esp_err_t max98357_init(max98357_handle_t *handle)
         return ESP_ERR_INVALID_ARG;
     }
 
+    esp_err_t ret = s_config_power_pin();
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // 默认关闭功放，等到播放时才打开
+    ret = gpio_set_level(AUDIO_SD, 0);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
     handle->initialized = 1;
     return ESP_OK;
 }
@@ -179,10 +204,20 @@ esp_err_t max98357_deinit(max98357_handle_t *handle)
         return ESP_ERR_INVALID_ARG;
     }
 
+    (void)max98357_set_enabled(handle, false);
     s_cleanup_tx_channel(handle);
 
     handle->initialized = 0;
     return ESP_OK;
+}
+
+esp_err_t max98357_set_enabled(max98357_handle_t *handle, bool enable)
+{
+    if (handle == NULL || !handle->initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    return gpio_set_level(AUDIO_SD, enable ? 1 : 0);
 }
 
 esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
@@ -223,7 +258,7 @@ esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
     }
 
     i2s_std_config_t std_cfg = {
-        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(handle->config.sample_rate_hz),
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(wav.fmt.sample_rate),
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, slot_mode),
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED,

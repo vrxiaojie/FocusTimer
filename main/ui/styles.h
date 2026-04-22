@@ -39,6 +39,7 @@ void remove_style_btn_label_style(lv_obj_t *obj);
 
 // Style: progress_bar_style
 lv_style_t *get_style_progress_bar_style_MAIN_DEFAULT();
+lv_style_t *get_style_progress_bar_style_MAIN_FOCUSED();
 lv_style_t *get_style_progress_bar_style_INDICATOR_DEFAULT();
 lv_style_t *get_style_progress_bar_style_KNOB_DEFAULT();
 void add_style_progress_bar_style(lv_obj_t *obj);
