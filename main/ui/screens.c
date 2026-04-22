@@ -360,6 +360,26 @@ void create_screen_mp3() {
             lv_obj_add_event_cb(obj, action_mp3_scr_volume_slider, LV_EVENT_VALUE_CHANGED, (void *)0);
             add_style_progress_bar_style(obj);
         }
+        {
+            // mp3_scr_current_total_time_label
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.mp3_scr_current_total_time_label = obj;
+            lv_obj_set_pos(obj, 178, 138);
+            lv_obj_set_size(obj, 130, 24);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "00:00/00:00");
+        }
+        {
+            // mp3_scr_file_count_label
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.mp3_scr_file_count_label = obj;
+            lv_obj_set_pos(obj, -5, 93);
+            lv_obj_set_size(obj, 99, 24);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "1/100");
+        }
     }
     
     tick_screen_mp3();

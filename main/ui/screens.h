@@ -45,6 +45,8 @@ typedef struct _objects_t {
     lv_obj_t *mp3_scr_play_pause_btn;
     lv_obj_t *mp3_scr_forward_btn;
     lv_obj_t *mp3_scr_volume_slider;
+    lv_obj_t *mp3_scr_current_total_time_label;
+    lv_obj_t *mp3_scr_file_count_label;
     lv_obj_t *setting_scr_back_to_main_btn;
     lv_obj_t *pomodoro_back_to_main_btn;
     lv_obj_t *pomodoro_scr_start_pause_btn;
