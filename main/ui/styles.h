@@ -22,6 +22,35 @@ lv_style_t *get_style_checkbox_style_INDICATOR_CHECKED();
 void add_style_checkbox_style(lv_obj_t *obj);
 void remove_style_checkbox_style(lv_obj_t *obj);
 
+// Style: screen_style_dark
+lv_style_t *get_style_screen_style_dark_MAIN_DEFAULT();
+void add_style_screen_style_dark(lv_obj_t *obj);
+void remove_style_screen_style_dark(lv_obj_t *obj);
+
+// Style: label_style
+lv_style_t *get_style_label_style_MAIN_DEFAULT();
+void add_style_label_style(lv_obj_t *obj);
+void remove_style_label_style(lv_obj_t *obj);
+
+// Style: btn_label_style
+lv_style_t *get_style_btn_label_style_MAIN_DEFAULT();
+void add_style_btn_label_style(lv_obj_t *obj);
+void remove_style_btn_label_style(lv_obj_t *obj);
+
+// Style: progress_bar_style
+lv_style_t *get_style_progress_bar_style_MAIN_DEFAULT();
+lv_style_t *get_style_progress_bar_style_INDICATOR_DEFAULT();
+lv_style_t *get_style_progress_bar_style_KNOB_DEFAULT();
+void add_style_progress_bar_style(lv_obj_t *obj);
+void remove_style_progress_bar_style(lv_obj_t *obj);
+
+// Style: arc
+lv_style_t *get_style_arc_INDICATOR_DEFAULT();
+lv_style_t *get_style_arc_KNOB_DEFAULT();
+lv_style_t *get_style_arc_MAIN_DEFAULT();
+void add_style_arc(lv_obj_t *obj);
+void remove_style_arc(lv_obj_t *obj);
+
 #ifdef __cplusplus
 }
 #endif

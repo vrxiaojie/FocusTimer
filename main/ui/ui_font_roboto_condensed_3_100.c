@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 100 px
  * Bpp: 1
- * Opts: --bpp 1 --size 100 --no-compress --font Z:\Roboto-Condensed\Roboto-Condensed-3.ttf --symbols 01234556789: --range 32-127 --format lvgl
+ * Opts: --bpp 1 --size 100 --no-compress --font Z:\Roboto-Condensed\Roboto-Condensed-3.ttf --range 32-127 --format lvgl
  ******************************************************************************/
 
 #ifdef __has_include
@@ -18,11 +18,11 @@
     #include "lvgl.h"
 #endif
 
-#ifndef UI_FONT_ROBOTO
-#define UI_FONT_ROBOTO 1
+#ifndef UI_FONT_ROBOTO_CONDENSED_3_100
+#define UI_FONT_ROBOTO_CONDENSED_3_100 1
 #endif
 
-#if UI_FONT_ROBOTO
+#if UI_FONT_ROBOTO_CONDENSED_3_100
 
 /*-----------------
  *    BITMAPS
@@ -4531,9 +4531,9 @@ static lv_font_fmt_txt_dsc_t font_dsc = {
 
 /*Initialize a public general font descriptor*/
 #if LVGL_VERSION_MAJOR >= 8
-const lv_font_t ui_font_roboto = {
+const lv_font_t ui_font_roboto_condensed_3_100 = {
 #else
-lv_font_t ui_font_roboto = {
+lv_font_t ui_font_roboto_condensed_3_100 = {
 #endif
     .get_glyph_dsc = lv_font_get_glyph_dsc_fmt_txt,    /*Function pointer to get glyph's data*/
     .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,    /*Function pointer to get glyph's bitmap*/
@@ -4553,4 +4553,4 @@ lv_font_t ui_font_roboto = {
     .user_data = NULL,
 };
 
-#endif /*#if UI_FONT_ROBOTO*/
+#endif /*#if UI_FONT_ROBOTO_CONDENSED_3_100*/

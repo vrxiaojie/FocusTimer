@@ -9,172 +9,149 @@
 #include "freertos/task.h"
 #include "esp_sleep.h"
 #include "lvgl_user.h"
+#include "stcc4.h"
+#include "main_screen_calls.h"
+#include "pomodoro_screen_calls.h"
+#include "message_screen_calls.h"
 
 extern esp_lcd_panel_handle_t panel_handle;
 
-void action_btn1_action(lv_event_t *e)
+static bool ui_action_blocked_by_message_modal(void)
 {
-    static bool rotate = false;
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_SHORT_CLICKED)
-    {
-        lv_display_set_rotation(lvgl_display, rotate ? LV_DISPLAY_ROTATION_270 : LV_DISPLAY_ROTATION_90);
-        rotate = !rotate;
-    }
+    return message_screen_is_modal_active();
 }
 
-void action_btn2_action(lv_event_t *e)
-{
-    static bool invert_color = false;
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_SHORT_CLICKED)
-    {
-        ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_handle, invert_color)); // 调整反色
-        invert_color = !invert_color;
-    }
-}
-
-
-void action_btn3_action(lv_event_t *e)
+void action_goto_submain_btn(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SHORT_CLICKED)
     {
-        
-    }
-}
-
-// 切换电源模式
-void action_btn4_action(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_SHORT_CLICKED)
-    {
-        switch (esp_lcd_panel_st7305_get_power_mode(panel_handle))
+        if (ui_action_blocked_by_message_modal())
         {
-        case ST7305_PWR_MODE_HPM:
-            esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
-            break;
-        case ST7305_PWR_MODE_LPM:
-            esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
-            break;
+            return;
         }
+        lv_screen_load_anim(objects.sub_main, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
     }
 }
 
-void action_btn5_action(lv_event_t *e)
+void action_back_to_main_btn(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
-    static char buf[8] = {0};
-    static uint8_t cnt = 0;
-    esp_pm_config_t pm_config = {.light_sleep_enable = false, .min_freq_mhz = 48};
-
     if (code == LV_EVENT_SHORT_CLICKED)
     {
-        switch (cnt)
+        if (ui_action_blocked_by_message_modal())
         {
-        case 0:
-            snprintf(buf, sizeof(buf), "48MHz");
-            pm_config.min_freq_mhz = 48;
-            pm_config.max_freq_mhz = 48;
-            break;
-        case 1:
-            snprintf(buf, sizeof(buf), "64MHz");
-            pm_config.min_freq_mhz = 64;
-            pm_config.max_freq_mhz = 64;
-            break;
-        case 2:
-            snprintf(buf, sizeof(buf), "96MHz");
-            pm_config.min_freq_mhz = 96;
-            pm_config.max_freq_mhz = 96;
-            break;
+            return;
         }
-        ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
-        cnt++;
-        cnt %= 3;
-
-        lv_label_set_text(lv_obj_get_child(objects.obj4, 0), buf);
+        lv_screen_load_anim(objects.main, LV_SCREEN_LOAD_ANIM_OVER_RIGHT, 200, 0, false);
     }
 }
 
-void action_btn6_action(lv_event_t *e)
+void action_main_scr(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SCREEN_LOADED)
+    {
+        main_screen_start_update_task();
+    }
+    if (code == LV_EVENT_SCREEN_UNLOADED)
+    {
+        main_screen_stop_update_task();
+    }
+}
+
+void action_submain_scr_enter_pomodoro_btn(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SHORT_CLICKED)
     {
-        lv_screen_load(objects.timer);
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        lv_screen_load_anim(objects.pomodoro, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
     }
 }
 
-void action_timer_back_btn(lv_event_t *e)
+void action_submain_scr_enter_mp3_btn(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SHORT_CLICKED)
     {
-        lv_screen_load(objects.main);
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        lv_screen_load_anim(objects.mp3, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
     }
 }
 
-#include "esp_timer.h"
-#include "esp_pm.h"
-
-static esp_timer_handle_t timer_handle = NULL;
-static int current_time_seconds = 0;
-
-static void timer_screen_cb(void *arg)
+void action_submain_scr_enter_setting_btn(lv_event_t *e)
 {
-    current_time_seconds++;
-    int m = current_time_seconds / 60;
-    int s = current_time_seconds % 60;
-
-    char buf_m[11];
-    char buf_s[11];
-    snprintf(buf_m, sizeof(buf_m), "%02d", m);
-    snprintf(buf_s, sizeof(buf_s), "%02d", s);
-
-    // 如果你有LVGL的互斥锁（例如 lv_port_sem），建议在这里加锁
-    _lock_acquire(&lvgl_api_lock);
-    lv_label_set_text(objects.time_minute, buf_m);
-    lv_label_set_text(objects.time_second, buf_s);
-    _lock_release(&lvgl_api_lock);
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        lv_screen_load_anim(objects.setting, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
+    }
 }
 
-void action_timer_screen_action(lv_event_t *e)
+void action_pomodoro_scr_start_pause_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        pomodoro_screen_toggle_pause();
+    }
+}
+
+void action_pomodoro_scr_reset_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        pomodoro_screen_reset();
+    }
+}
+
+void action_pomodoro_scr_skip_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        pomodoro_screen_skip();
+    }
+}
+
+void action_pomodoro_scr(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SCREEN_LOAD_START)
     {
-        current_time_seconds = 0;
-        const esp_timer_create_args_t timer_args = {
-            .callback = &timer_screen_cb,
-            .arg = NULL,
-            .name = "timer_screen",
-            .skip_unhandled_events = true // 如果系统睡眠过头忽略掉丢失的事件
-        };
-        ESP_ERROR_CHECK(esp_timer_create(&timer_args, &timer_handle));
-        ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handle, 1000000)); // 1秒 = 1000000微秒
-
-        // 开启自动Light Sleep特性
-        esp_pm_config_t pm_config = {
-            .max_freq_mhz = 48,
-            .min_freq_mhz = 48};
-        ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
-        esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM); // 进入低功耗模式
+        pomodoro_screen_start_update_task();
     }
-    else if (code == LV_EVENT_SCREEN_UNLOAD_START)
-    {
-        if (timer_handle)
-        {
-            esp_timer_stop(timer_handle);
-            esp_timer_delete(timer_handle);
-            timer_handle = NULL;
-        }
+}
 
-        // 退出页面
-        esp_pm_config_t pm_config = {
-            .max_freq_mhz = 96,
-            .min_freq_mhz = 48};
-        ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
-        esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
+void action_message_scr_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        message_screen_handle_ok();
     }
 }
