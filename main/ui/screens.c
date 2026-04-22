@@ -231,7 +231,7 @@ void create_screen_mp3() {
             objects.mp3_scr_back_to_main_btn = obj;
             lv_obj_set_pos(obj, 6, 5);
             lv_obj_set_size(obj, 38, 29);
-            lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_SHORT_CLICKED, (void *)1);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
