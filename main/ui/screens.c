@@ -220,6 +220,8 @@ void create_screen_mp3() {
     objects.mp3 = obj;
     lv_obj_set_pos(obj, 0, 0);
     lv_obj_set_size(obj, 384, 168);
+    lv_obj_add_event_cb(obj, action_mp3_scr, LV_EVENT_SCREEN_LOADED, (void *)0);
+    lv_obj_add_event_cb(obj, action_mp3_scr, LV_EVENT_SCREEN_UNLOADED, (void *)0);
     add_style_screen_style_dark(obj);
     {
         lv_obj_t *parent_obj = obj;
@@ -290,7 +292,7 @@ void create_screen_mp3() {
             objects.mp3_scr_backward_btn = obj;
             lv_obj_set_pos(obj, 114, 88);
             lv_obj_set_size(obj, 32, 32);
-            lv_obj_add_event_cb(obj, action_pomodoro_scr_start_pause_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_mp3_scr_backward_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             lv_obj_set_style_radius(obj, 15, LV_PART_MAIN | LV_STATE_DEFAULT);
             {
@@ -311,7 +313,7 @@ void create_screen_mp3() {
             objects.mp3_scr_play_pause_btn = obj;
             lv_obj_set_pos(obj, 176, 88);
             lv_obj_set_size(obj, 32, 32);
-            lv_obj_add_event_cb(obj, action_pomodoro_scr_start_pause_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_mp3_scr_play_pause_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             lv_obj_set_style_radius(obj, 15, LV_PART_MAIN | LV_STATE_DEFAULT);
             {
@@ -332,7 +334,7 @@ void create_screen_mp3() {
             objects.mp3_scr_forward_btn = obj;
             lv_obj_set_pos(obj, 237, 88);
             lv_obj_set_size(obj, 32, 32);
-            lv_obj_add_event_cb(obj, action_pomodoro_scr_start_pause_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_mp3_scr_forward_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             lv_obj_set_style_radius(obj, 15, LV_PART_MAIN | LV_STATE_DEFAULT);
             {
@@ -353,7 +355,9 @@ void create_screen_mp3() {
             objects.mp3_scr_volume_slider = obj;
             lv_obj_set_pos(obj, 348, 20);
             lv_obj_set_size(obj, 10, 100);
-            lv_slider_set_value(obj, 20, LV_ANIM_OFF);
+            lv_slider_set_range(obj, 0, 10);
+            lv_slider_set_value(obj, 2, LV_ANIM_OFF);
+            lv_obj_add_event_cb(obj, action_mp3_scr_volume_slider, LV_EVENT_VALUE_CHANGED, (void *)0);
             add_style_progress_bar_style(obj);
         }
     }

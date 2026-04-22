@@ -11,6 +11,7 @@
 #include "lvgl_user.h"
 #include "stcc4.h"
 #include "main_screen_calls.h"
+#include "mp3_screen_calls.h"
 #include "pomodoro_screen_calls.h"
 #include "message_screen_calls.h"
 
@@ -153,5 +154,70 @@ void action_message_scr_btn(lv_event_t *e)
     if (code == LV_EVENT_SHORT_CLICKED)
     {
         message_screen_handle_ok();
+    }
+}
+
+void action_mp3_scr(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SCREEN_LOADED)
+    {
+        mp3_screen_start_update_task();
+    }
+    if (code == LV_EVENT_SCREEN_UNLOADED)
+    {
+        mp3_screen_stop_update_task();
+    }
+}
+
+void action_mp3_scr_backward_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        mp3_screen_play_prev();
+    }
+}
+
+void action_mp3_scr_play_pause_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        mp3_screen_toggle_pause();
+    }
+}
+
+void action_mp3_scr_forward_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        mp3_screen_play_next();
+    }
+}
+
+void action_mp3_scr_volume_slider(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_VALUE_CHANGED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        mp3_screen_set_volume_from_slider(lv_event_get_target(e));
     }
 }
