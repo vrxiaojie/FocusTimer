@@ -220,7 +220,6 @@ void create_screen_mp3() {
     objects.mp3 = obj;
     lv_obj_set_pos(obj, 0, 0);
     lv_obj_set_size(obj, 384, 168);
-    lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_PRESSED, (void *)0);
     add_style_screen_style_dark(obj);
     {
         lv_obj_t *parent_obj = obj;
@@ -244,6 +243,118 @@ void create_screen_mp3() {
                     lv_label_set_text(obj, "<-");
                 }
             }
+        }
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 338, 124);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_font(obj, &ui_font_custom_symbol_fa_pro_regular_26, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "");
+        }
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 173, 5);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, "MP3");
+        }
+        {
+            // mp3_scr_musictitle_label
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.mp3_scr_musictitle_label = obj;
+            lv_obj_set_pos(obj, 53, 46);
+            lv_obj_set_size(obj, 279, 24);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "音乐标题");
+        }
+        {
+            // mp3_scr_play_progress
+            lv_obj_t *obj = lv_slider_create(parent_obj);
+            objects.mp3_scr_play_progress = obj;
+            lv_obj_set_pos(obj, 79, 131);
+            lv_obj_set_size(obj, 229, 6);
+            lv_obj_remove_flag(obj, LV_OBJ_FLAG_CLICKABLE|LV_OBJ_FLAG_CLICK_FOCUSABLE);
+            add_style_progress_bar_style(obj);
+            lv_obj_set_style_bg_opa(obj, 255, LV_PART_KNOB | LV_STATE_DEFAULT);
+            lv_obj_set_style_bg_color(obj, lv_color_hex(0xff000000), LV_PART_KNOB | LV_STATE_DEFAULT);
+            lv_obj_set_style_pad_top(obj, 2, LV_PART_KNOB | LV_STATE_DEFAULT);
+            lv_obj_set_style_pad_bottom(obj, 2, LV_PART_KNOB | LV_STATE_DEFAULT);
+            lv_obj_set_style_pad_left(obj, 2, LV_PART_KNOB | LV_STATE_DEFAULT);
+            lv_obj_set_style_pad_right(obj, 2, LV_PART_KNOB | LV_STATE_DEFAULT);
+        }
+        {
+            // mp3_scr_backward_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.mp3_scr_backward_btn = obj;
+            lv_obj_set_pos(obj, 114, 88);
+            lv_obj_set_size(obj, 32, 32);
+            lv_obj_add_event_cb(obj, action_pomodoro_scr_start_pause_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            lv_obj_set_style_radius(obj, 15, LV_PART_MAIN | LV_STATE_DEFAULT);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, -10, -9);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_text_font(obj, &ui_font_custom_symbol_fa_pro_regular_26, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "");
+                }
+            }
+        }
+        {
+            // mp3_scr_play_pause_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.mp3_scr_play_pause_btn = obj;
+            lv_obj_set_pos(obj, 176, 88);
+            lv_obj_set_size(obj, 32, 32);
+            lv_obj_add_event_cb(obj, action_pomodoro_scr_start_pause_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            lv_obj_set_style_radius(obj, 15, LV_PART_MAIN | LV_STATE_DEFAULT);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, -16, -9);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_text_font(obj, &ui_font_custom_symbol_fa_pro_regular_26, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "");
+                }
+            }
+        }
+        {
+            // mp3_scr_forward_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.mp3_scr_forward_btn = obj;
+            lv_obj_set_pos(obj, 237, 88);
+            lv_obj_set_size(obj, 32, 32);
+            lv_obj_add_event_cb(obj, action_pomodoro_scr_start_pause_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            lv_obj_set_style_radius(obj, 15, LV_PART_MAIN | LV_STATE_DEFAULT);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, -10, -9);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_text_font(obj, &ui_font_custom_symbol_fa_pro_regular_26, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "");
+                }
+            }
+        }
+        {
+            // mp3_scr_volume_slider
+            lv_obj_t *obj = lv_slider_create(parent_obj);
+            objects.mp3_scr_volume_slider = obj;
+            lv_obj_set_pos(obj, 348, 20);
+            lv_obj_set_size(obj, 10, 100);
+            lv_slider_set_value(obj, 20, LV_ANIM_OFF);
+            add_style_progress_bar_style(obj);
         }
     }
     
