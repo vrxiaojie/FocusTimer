@@ -70,6 +70,8 @@ typedef enum {
 esp_err_t pcf85263a_init(i2c_port_num_t port_num);
 esp_err_t pcf85263a_deinit(void);
 
+pcf85263a_handle_t pcf85263a_get_handle(void);
+
 esp_err_t pcf85263a_set_datetime(pcf85263a_handle_t handle, const pcf85263a_datetime_t *dt);
 esp_err_t pcf85263a_get_datetime(pcf85263a_handle_t handle, pcf85263a_datetime_t *dt);
 

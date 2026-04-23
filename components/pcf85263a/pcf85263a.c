@@ -143,6 +143,11 @@ esp_err_t pcf85263a_deinit()
     return ret;
 }
 
+pcf85263a_handle_t pcf85263a_get_handle(void)
+{
+    return (pcf85263a_handle_t)pcf85263a_i2c_dev_handle;
+}
+
 esp_err_t pcf85263a_set_datetime(pcf85263a_handle_t handle, const pcf85263a_datetime_t *dt)
 {
     ESP_RETURN_ON_FALSE((handle != NULL) && (dt != NULL), ESP_ERR_INVALID_ARG, "pcf85263a", "null arg");
