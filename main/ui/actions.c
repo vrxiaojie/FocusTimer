@@ -14,6 +14,7 @@
 #include "mp3_screen_calls.h"
 #include "pomodoro_screen_calls.h"
 #include "message_screen_calls.h"
+#include "setting_screen_calls.h"
 
 extern esp_lcd_panel_handle_t panel_handle;
 
@@ -237,4 +238,14 @@ void action_mp3_scr_volume_slider(lv_event_t *e)
         }
         mp3_screen_set_volume_from_slider(lv_event_get_target(e));
     }
+}
+
+void action_setting_scr_date_btn(lv_event_t *e)
+{
+    handle_setting_date_btn_event(e);
+}
+
+void action_setting_scr(lv_event_t *e)
+{
+    handle_setting_screen_load_unload_event(e);
 }

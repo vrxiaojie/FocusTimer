@@ -23,6 +23,8 @@ extern void action_mp3_scr_backward_btn(lv_event_t * e);
 extern void action_mp3_scr_play_pause_btn(lv_event_t * e);
 extern void action_mp3_scr_forward_btn(lv_event_t * e);
 extern void action_mp3_scr_volume_slider(lv_event_t * e);
+extern void action_setting_scr_date_btn(lv_event_t * e);
+extern void action_setting_scr(lv_event_t * e);
 
 #ifdef __cplusplus
 }

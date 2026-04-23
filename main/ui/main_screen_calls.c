@@ -44,15 +44,11 @@ static void main_screen_timer_cb(void *arg)
     main_screen_notify_update_task();
 }
 
-static void update_main_screen_labels(const STCC4_value_t *sensor_value)
+void update_main_screen_date_labels(bool acquire_lock)
 {
     char time_text[12] = "--:--";
     char date_text[24] = "----年--月--日";
     char dayofweek_text[10] = "星期日";
-    char temp_text[16];
-    char humid_text[16];
-    char co2_text[16];
-
     pcf85263a_datetime_t datetime = {0};
     pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
 
@@ -71,11 +67,10 @@ static void update_main_screen_labels(const STCC4_value_t *sensor_value)
         }
     }
 
-    (void)snprintf(temp_text, sizeof(temp_text), "%.1f℃", sensor_value->temperature);
-    (void)snprintf(humid_text, sizeof(humid_text), "%.1f%%", sensor_value->relativeHumidity);
-    (void)snprintf(co2_text, sizeof(co2_text), "%dppm", sensor_value->co2Concentration);
-
-    _lock_acquire(&lvgl_api_lock);
+    if (acquire_lock)
+    {
+        _lock_acquire(&lvgl_api_lock);
+    }
     if (objects.main_scr_time_label != NULL)
     {
         lv_label_set_text(objects.main_scr_time_label, time_text);
@@ -92,6 +87,25 @@ static void update_main_screen_labels(const STCC4_value_t *sensor_value)
     {
         lv_label_set_text(objects.pomodoro_scr_nowtime_label, time_text);
     }
+    if (acquire_lock)
+    {
+        _lock_release(&lvgl_api_lock);
+    }
+}
+
+static void update_main_screen_labels(const STCC4_value_t *sensor_value)
+{
+    char temp_text[16];
+    char humid_text[16];
+    char co2_text[16];
+
+    update_main_screen_date_labels(true);
+
+    (void)snprintf(temp_text, sizeof(temp_text), "%.1f℃", sensor_value->temperature);
+    (void)snprintf(humid_text, sizeof(humid_text), "%.1f%%", sensor_value->relativeHumidity);
+    (void)snprintf(co2_text, sizeof(co2_text), "%dppm", sensor_value->co2Concentration);
+
+    _lock_acquire(&lvgl_api_lock);
     if (objects.main_scr_temp_value_label != NULL)
     {
         lv_label_set_text(objects.main_scr_temp_value_label, temp_text);
