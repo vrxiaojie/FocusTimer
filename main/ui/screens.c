@@ -97,21 +97,21 @@ void create_screen_main() {
             // main_scr_date_value_label
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.main_scr_date_value_label = obj;
-            lv_obj_set_pos(obj, 101, 6);
-            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            lv_obj_set_pos(obj, 69, 6);
+            lv_obj_set_size(obj, 160, 24);
             add_style_label_style(obj);
-            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_label_set_text(obj, "10月15日");
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "2026年01月01日");
         }
         {
             // main_scr_dayofweek_value_label
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.main_scr_dayofweek_value_label = obj;
-            lv_obj_set_pos(obj, 216, 6);
+            lv_obj_set_pos(obj, 244, 6);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             add_style_label_style(obj);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_label_set_text(obj, "星期一");
+            lv_label_set_text(obj, "星期四");
         }
     }
     

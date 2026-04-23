@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <time.h>
 #include <sys/lock.h>
 
 #include "freertos/FreeRTOS.h"
@@ -9,6 +8,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
+#include "pcf85263a.h"
 #include "stcc4.h"
 #include "lvgl_user.h"
 #include "screens.h"
@@ -19,6 +19,16 @@
 static const char *TAG = "main_screen_calls";
 static TaskHandle_t s_main_screen_update_task_handle = NULL;
 static esp_timer_handle_t s_main_screen_timer_handle = NULL;
+
+static const char *const s_weekday_text[] = {
+    "星期日",
+    "星期一",
+    "星期二",
+    "星期三",
+    "星期四",
+    "星期五",
+    "星期六",
+};
 
 static void main_screen_notify_update_task(void)
 {
@@ -36,29 +46,47 @@ static void main_screen_timer_cb(void *arg)
 
 static void update_main_screen_labels(const STCC4_value_t *sensor_value)
 {
-    char time_text[16];
+    char time_text[12] = "--:--";
+    char date_text[24] = "----年--月--日";
+    char dayofweek_text[10] = "星期日";
     char temp_text[16];
     char humid_text[16];
     char co2_text[16];
 
-    time_t now = time(NULL);
-    struct tm time_info = {0};
+    pcf85263a_datetime_t datetime = {0};
+    pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
 
-    if (now > 0)
+    if ((rtc_handle != NULL) && (pcf85263a_get_datetime(rtc_handle, &datetime) == ESP_OK))
     {
-        localtime_r(&now, &time_info);
+        (void)snprintf(time_text, sizeof(time_text), "%02u:%02u", datetime.hour, datetime.minute);
+        (void)snprintf(date_text, sizeof(date_text), "%u年%u月%u日", datetime.year, datetime.month, datetime.day);
+
+        if (datetime.weekday < (sizeof(s_weekday_text) / sizeof(s_weekday_text[0])))
+        {
+            (void)snprintf(dayofweek_text, sizeof(dayofweek_text), "%s", s_weekday_text[datetime.weekday]);
+        }
+        else
+        {
+            (void)snprintf(dayofweek_text, sizeof(dayofweek_text), "星期?");
+        }
     }
 
-    (void)snprintf(time_text, sizeof(time_text), "%02d:%02d", time_info.tm_hour, time_info.tm_min);
     (void)snprintf(temp_text, sizeof(temp_text), "%.1f℃", sensor_value->temperature);
     (void)snprintf(humid_text, sizeof(humid_text), "%.1f%%", sensor_value->relativeHumidity);
     (void)snprintf(co2_text, sizeof(co2_text), "%dppm", sensor_value->co2Concentration);
 
     _lock_acquire(&lvgl_api_lock);
-    // TODO: 在加入RTC后将此部分改为从RTC获取时间并更新
     if (objects.main_scr_time_label != NULL)
     {
         lv_label_set_text(objects.main_scr_time_label, time_text);
+    }
+    if (objects.main_scr_date_value_label != NULL)
+    {
+        lv_label_set_text(objects.main_scr_date_value_label, date_text);
+    }
+    if (objects.main_scr_dayofweek_value_label != NULL)
+    {
+        lv_label_set_text(objects.main_scr_dayofweek_value_label, dayofweek_text);
     }
     if (objects.pomodoro_scr_nowtime_label != NULL)
     {
