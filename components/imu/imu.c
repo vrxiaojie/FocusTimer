@@ -14,27 +14,27 @@
 #define LOG_TAG "IMU"
 
 #define I2C_MASTER_FREQ_HZ 400000
-#define IMU_I2C_ADDR ICM42670_I2C_ADDRESS  // 0x68
+#define IMU_I2C_ADDR ICM42670_I2C_ADDRESS // 0x68
 
 // 设备ID
 #define ICM42607_ID 0x60
 #define ICM42670_ID 0x67
 
 // 互补滤波器参数
-#define ALPHA                       0.97f        /*!< 陀螺仪权重 */
-#define RAD_TO_DEG                  57.27272727f /*!< 弧度转角度 */
+#define ALPHA 0.97f             /*!< 陀螺仪权重 */
+#define RAD_TO_DEG 57.27272727f /*!< 弧度转角度 */
 
 /* 陀螺仪灵敏度 */
 #define GYRO_FS_2000_SENSITIVITY (16.4f)
 #define GYRO_FS_1000_SENSITIVITY (32.8f)
-#define GYRO_FS_500_SENSITIVITY  (65.5f)
-#define GYRO_FS_250_SENSITIVITY  (131.0f)
+#define GYRO_FS_500_SENSITIVITY (65.5f)
+#define GYRO_FS_250_SENSITIVITY (131.0f)
 
 /* 加速度计灵敏度 */
 #define ACCE_FS_16G_SENSITIVITY (2048.0f)
-#define ACCE_FS_8G_SENSITIVITY  (4096.0f)
-#define ACCE_FS_4G_SENSITIVITY  (8192.0f)
-#define ACCE_FS_2G_SENSITIVITY  (16384.0f)
+#define ACCE_FS_8G_SENSITIVITY (4096.0f)
+#define ACCE_FS_4G_SENSITIVITY (8192.0f)
+#define ACCE_FS_2G_SENSITIVITY (16384.0f)
 
 // 翻转检测阈值 (g)，当Y轴加速度超过此值时认为设备翻转
 #define FLIP_THRESHOLD 0.7f
@@ -45,7 +45,8 @@
  * 类型定义
  ******************************************************************************/
 
-typedef struct {
+typedef struct
+{
     i2c_master_dev_handle_t i2c_handle;
     bool initialized_filter;
     uint64_t previous_measurement_us;
@@ -79,7 +80,7 @@ esp_err_t icm42670_create(i2c_master_bus_handle_t i2c_bus, const uint8_t dev_add
     esp_err_t ret = ESP_OK;
 
     // 分配内存并初始化驱动对象
-    icm42670_dev_t *sensor = (icm42670_dev_t *) calloc(1, sizeof(icm42670_dev_t));
+    icm42670_dev_t *sensor = (icm42670_dev_t *)calloc(1, sizeof(icm42670_dev_t));
     ESP_RETURN_ON_FALSE(sensor != NULL, ESP_ERR_NO_MEM, LOG_TAG, "Not enough memory");
 
     // 添加新的I2C设备
@@ -94,7 +95,7 @@ esp_err_t icm42670_create(i2c_master_bus_handle_t i2c_bus, const uint8_t dev_add
     // 检查设备是否存在
     uint8_t dev_id = 0;
     icm42670_get_deviceid(sensor, &dev_id);
-    ESP_GOTO_ON_FALSE(dev_id == ICM42607_ID || dev_id == ICM42670_ID, ESP_ERR_NOT_FOUND, err, LOG_TAG, 
+    ESP_GOTO_ON_FALSE(dev_id == ICM42607_ID || dev_id == ICM42670_ID, ESP_ERR_NOT_FOUND, err, LOG_TAG,
                       "Incorrect Device ID (0x%02x).", dev_id);
 
     ESP_LOGI(LOG_TAG, "Found device %s, ID: 0x%02x", (dev_id == ICM42607_ID ? "ICM42607" : "ICM42670"), dev_id);
@@ -108,9 +109,10 @@ err:
 
 void icm42670_delete(icm42670_handle_t sensor)
 {
-    icm42670_dev_t *sens = (icm42670_dev_t *) sensor;
+    icm42670_dev_t *sens = (icm42670_dev_t *)sensor;
 
-    if (sens->i2c_handle) {
+    if (sens->i2c_handle)
+    {
         i2c_master_bus_rm_device(sens->i2c_handle);
     }
 
@@ -123,7 +125,8 @@ esp_err_t icm42670_get_deviceid(icm42670_handle_t sensor, uint8_t *deviceid)
 
     assert(deviceid != NULL);
 
-    for (int i = 0; (i < 5 && ret != ESP_OK); i++) {
+    for (int i = 0; (i < 5 && ret != ESP_OK); i++)
+    {
         ret = icm42670_read(sensor, ICM42670_WHOAMI, deviceid, 1);
     }
 
@@ -150,7 +153,8 @@ esp_err_t icm42670_acce_set_pwr(icm42670_handle_t sensor, icm42670_acce_pwr_t st
     uint8_t data;
 
     ret = icm42670_read(sensor, ICM42670_PWR_MGMT0, &data, 1);
-    if (ret == ESP_OK) {
+    if (ret == ESP_OK)
+    {
         data |= (state & 0x03);
 
         ret = icm42670_write(sensor, ICM42670_PWR_MGMT0, &data, sizeof(data));
@@ -165,7 +169,8 @@ esp_err_t icm42670_gyro_set_pwr(icm42670_handle_t sensor, icm42670_gyro_pwr_t st
     uint8_t data;
 
     ret = icm42670_read(sensor, ICM42670_PWR_MGMT0, &data, 1);
-    if (ret == ESP_OK) {
+    if (ret == ESP_OK)
+    {
         data |= ((state & 0x03) << 2);
 
         ret = icm42670_write(sensor, ICM42670_PWR_MGMT0, &data, sizeof(data));
@@ -184,9 +189,11 @@ esp_err_t icm42670_get_acce_sensitivity(icm42670_handle_t sensor, float *sensiti
     *sensitivity = 0;
 
     ret = icm42670_read(sensor, ICM42670_ACCEL_CONFIG0, &acce_fs, 1);
-    if (ret == ESP_OK) {
+    if (ret == ESP_OK)
+    {
         acce_fs = (acce_fs >> 5) & 0x03;
-        switch (acce_fs) {
+        switch (acce_fs)
+        {
         case ACCE_FS_16G:
             *sensitivity = ACCE_FS_16G_SENSITIVITY;
             break;
@@ -215,9 +222,11 @@ esp_err_t icm42670_get_gyro_sensitivity(icm42670_handle_t sensor, float *sensiti
     *sensitivity = 0;
 
     ret = icm42670_read(sensor, ICM42670_GYRO_CONFIG0, &gyro_fs, 1);
-    if (ret == ESP_OK) {
+    if (ret == ESP_OK)
+    {
         gyro_fs = (gyro_fs >> 5) & 0x03;
-        switch (gyro_fs) {
+        switch (gyro_fs)
+        {
         case GYRO_FS_2000DPS:
             *sensitivity = GYRO_FS_2000_SENSITIVITY;
             break;
@@ -246,7 +255,8 @@ esp_err_t icm42670_get_temp_raw_value(icm42670_handle_t sensor, uint16_t *value)
     *value = 0;
 
     ret = icm42670_read(sensor, ICM42670_TEMP_DATA, data, sizeof(data));
-    if (ret == ESP_OK) {
+    if (ret == ESP_OK)
+    {
         *value = (uint16_t)((data[0] << 8) + data[1]);
     }
 
@@ -333,7 +343,7 @@ esp_err_t icm42670_get_temp_value(icm42670_handle_t sensor, float *value)
 esp_err_t icm42670_complimentory_filter(icm42670_handle_t sensor, const icm42670_value_t *const acce_value,
                                         const icm42670_value_t *const gyro_value, complimentary_angle_t *const complimentary_angle)
 {
-    icm42670_dev_t *sens = (icm42670_dev_t *) sensor;
+    icm42670_dev_t *sens = (icm42670_dev_t *)sensor;
     float measurement_delta;
     uint64_t current_time_us;
     float acc_roll_angle;
@@ -342,11 +352,14 @@ esp_err_t icm42670_complimentory_filter(icm42670_handle_t sensor, const icm42670
     float gyro_pitch_angle;
 
     acc_roll_angle = (atan2(acce_value->y,
-                            sqrt(acce_value->x * acce_value->x + acce_value->z * acce_value->z)) * RAD_TO_DEG);
+                            sqrt(acce_value->x * acce_value->x + acce_value->z * acce_value->z)) *
+                      RAD_TO_DEG);
     acc_pitch_angle = (atan2(-acce_value->x,
-                             sqrt(acce_value->y * acce_value->y + acce_value->z * acce_value->z)) * RAD_TO_DEG);
+                             sqrt(acce_value->y * acce_value->y + acce_value->z * acce_value->z)) *
+                       RAD_TO_DEG);
 
-    if (!sens->initialized_filter) {
+    if (!sens->initialized_filter)
+    {
         sens->initialized_filter = true;
         sens->previous_measurement_us = esp_timer_get_time();
         sens->previous_measurement.roll = acc_roll_angle;
@@ -382,13 +395,20 @@ esp_err_t icm42670_write_register(icm42670_handle_t sensor, uint8_t reg, uint8_t
 esp_err_t icm42670_read_mreg_register(icm42670_handle_t sensor, uint8_t mreg, uint8_t reg, uint8_t *val)
 {
     uint8_t blk_sel_r = 0;
-    if (mreg == 1) {
+    if (mreg == 1)
+    {
         blk_sel_r = 0;
-    } else if (mreg == 2) {
+    }
+    else if (mreg == 2)
+    {
         blk_sel_r = 0x28;
-    } else if (mreg == 3) {
+    }
+    else if (mreg == 3)
+    {
         blk_sel_r = 0x50;
-    } else {
+    }
+    else
+    {
         ESP_LOGE(LOG_TAG, "Invalid MREG value %d", mreg);
         return ESP_ERR_INVALID_ARG;
     }
@@ -409,13 +429,20 @@ esp_err_t icm42670_read_mreg_register(icm42670_handle_t sensor, uint8_t mreg, ui
 esp_err_t icm42670_write_mreg_register(icm42670_handle_t sensor, uint8_t mreg, uint8_t reg, uint8_t val)
 {
     uint8_t blk_sel_w = 0;
-    if (mreg == 1) {
+    if (mreg == 1)
+    {
         blk_sel_w = 0;
-    } else if (mreg == 2) {
+    }
+    else if (mreg == 2)
+    {
         blk_sel_w = 0x28;
-    } else if (mreg == 3) {
+    }
+    else if (mreg == 3)
+    {
         blk_sel_w = 0x50;
-    } else {
+    }
+    else
+    {
         ESP_LOGE(LOG_TAG, "Invalid MREG value %d", mreg);
         return ESP_ERR_INVALID_ARG;
     }
@@ -446,7 +473,8 @@ static esp_err_t icm42670_get_raw_value(icm42670_handle_t sensor, uint8_t reg, i
     value->z = 0;
 
     ret = icm42670_read(sensor, reg, data, sizeof(data));
-    if (ret == ESP_OK) {
+    if (ret == ESP_OK)
+    {
         value->x = (int16_t)((data[0] << 8) + data[1]);
         value->y = (int16_t)((data[2] << 8) + data[3]);
         value->z = (int16_t)((data[4] << 8) + data[5]);
@@ -457,7 +485,7 @@ static esp_err_t icm42670_get_raw_value(icm42670_handle_t sensor, uint8_t reg, i
 
 static esp_err_t icm42670_write(icm42670_handle_t sensor, const uint8_t reg_start_addr, const uint8_t *data_buf, const uint8_t data_len)
 {
-    icm42670_dev_t *sens = (icm42670_dev_t *) sensor;
+    icm42670_dev_t *sens = (icm42670_dev_t *)sensor;
     assert(sens);
 
     assert(data_len < 5);
@@ -469,7 +497,7 @@ static esp_err_t icm42670_write(icm42670_handle_t sensor, const uint8_t reg_star
 static esp_err_t icm42670_read(icm42670_handle_t sensor, const uint8_t reg_start_addr, uint8_t *data_buf, const uint8_t data_len)
 {
     uint8_t reg_buff[] = {reg_start_addr};
-    icm42670_dev_t *sens = (icm42670_dev_t *) sensor;
+    icm42670_dev_t *sens = (icm42670_dev_t *)sensor;
     assert(sens);
 
     /* 写入寄存器号并读取数据 */
@@ -484,13 +512,15 @@ esp_err_t imu_init(i2c_port_num_t i2c_port_num)
 {
     i2c_master_bus_handle_t bus_handle = NULL;
     esp_err_t ret = i2c_master_get_bus_handle(i2c_port_num, &bus_handle);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(LOG_TAG, "Failed to get I2C bus handle: %s", esp_err_to_name(ret));
         return ret;
     }
 
     ret = icm42670_create(bus_handle, IMU_I2C_ADDR, &imu_handle);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(LOG_TAG, "Failed to create ICM42670 device: %s", esp_err_to_name(ret));
         return ret;
     }
@@ -498,7 +528,8 @@ esp_err_t imu_init(i2c_port_num_t i2c_port_num)
     // 获取设备ID验证通信
     uint8_t device_id = 0;
     ret = icm42670_get_deviceid(imu_handle, &device_id);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(LOG_TAG, "Failed to get device ID: %s", esp_err_to_name(ret));
         icm42670_delete(imu_handle);
         imu_handle = NULL;
@@ -508,14 +539,15 @@ esp_err_t imu_init(i2c_port_num_t i2c_port_num)
 
     // 配置加速度计
     icm42670_cfg_t config = {
-        .acce_fs = ACCE_FS_2G,       // ±2g 量程
-        .acce_odr = ACCE_ODR_50HZ,   // 50Hz 采样率
-        .gyro_fs = GYRO_FS_250DPS,   // 陀螺仪量程（翻转检测不需要，但需要配置）
+        .acce_fs = ACCE_FS_2G,     // ±2g 量程
+        .acce_odr = ACCE_ODR_50HZ, // 50Hz 采样率
+        .gyro_fs = GYRO_FS_250DPS, // 陀螺仪量程（翻转检测不需要，但需要配置）
         .gyro_odr = GYRO_ODR_50HZ,
     };
-    
+
     ret = icm42670_config(imu_handle, &config);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(LOG_TAG, "Failed to configure ICM42670: %s", esp_err_to_name(ret));
         icm42670_delete(imu_handle);
         imu_handle = NULL;
@@ -524,7 +556,8 @@ esp_err_t imu_init(i2c_port_num_t i2c_port_num)
 
     // 开启加速度计
     ret = icm42670_acce_set_pwr(imu_handle, ACCE_PWR_LOWNOISE);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(LOG_TAG, "Failed to set accelerometer power: %s", esp_err_to_name(ret));
         icm42670_delete(imu_handle);
         imu_handle = NULL;
@@ -533,7 +566,8 @@ esp_err_t imu_init(i2c_port_num_t i2c_port_num)
 
     // 关闭陀螺仪以节省功耗
     ret = icm42670_gyro_set_pwr(imu_handle, GYRO_PWR_OFF);
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(LOG_TAG, "Failed to set gyroscope power: %s", esp_err_to_name(ret));
     }
 
@@ -544,8 +578,9 @@ esp_err_t imu_init(i2c_port_num_t i2c_port_num)
 esp_err_t imu_deinit(void)
 {
     imu_stop_flip_detection_task();
-    
-    if (imu_handle != NULL) {
+
+    if (imu_handle != NULL)
+    {
         icm42670_delete(imu_handle);
         imu_handle = NULL;
         ESP_LOGI(LOG_TAG, "ICM42670 de-initialized");
@@ -560,7 +595,7 @@ icm42670_handle_t imu_get_handle(void)
 
 /**
  * @brief 根据Y轴加速度判断屏幕旋转方向
- * 
+ *
  * @param acce_y Y轴加速度值 (g)
  * @return lv_disp_rotation_t 建议的旋转方向
  */
@@ -568,10 +603,13 @@ static lv_disp_rotation_t get_rotation_from_acce_y(float acce_y)
 {
     // 当Y轴加速度 > FLIP_THRESHOLD 时，设备正向朝上
     // 当Y轴加速度 < -FLIP_THRESHOLD 时，设备反向朝上（翻转180度）
-    if (acce_y > FLIP_THRESHOLD) {
-        return LV_DISPLAY_ROTATION_90;   // 正常方向
-    } else if (acce_y < -FLIP_THRESHOLD) {
-        return LV_DISPLAY_ROTATION_270;  // 翻转180度
+    if (acce_y > FLIP_THRESHOLD)
+    {
+        return LV_DISPLAY_ROTATION_90; // 正常方向
+    }
+    else if (acce_y < -FLIP_THRESHOLD)
+    {
+        return LV_DISPLAY_ROTATION_270; // 翻转180度
     }
     // 在阈值范围内，保持当前方向
     return current_rotation;
@@ -579,25 +617,28 @@ static lv_disp_rotation_t get_rotation_from_acce_y(float acce_y)
 
 /**
  * @brief 翻转检测任务
- * 
+ *
  * @param args 任务参数（未使用）
  */
 static void flip_detection_task(void *args)
 {
     icm42670_value_t acce_value;
     esp_err_t ret;
-    
+
     ESP_LOGI(LOG_TAG, "Flip detection task started");
-    
-    while (1) {
-        if (imu_handle == NULL) {
+
+    while (1)
+    {
+        if (imu_handle == NULL)
+        {
             vTaskDelay(pdMS_TO_TICKS(FLIP_DETECTION_PERIOD_MS));
             continue;
         }
 
         // 读取加速度计数据
         ret = icm42670_get_acce_value(imu_handle, &acce_value);
-        if (ret != ESP_OK) {
+        if (ret != ESP_OK)
+        {
             ESP_LOGW(LOG_TAG, "Failed to read accelerometer: %s", esp_err_to_name(ret));
             vTaskDelay(pdMS_TO_TICKS(FLIP_DETECTION_PERIOD_MS));
             continue;
@@ -605,21 +646,18 @@ static void flip_detection_task(void *args)
 
         // 根据Y轴加速度判断旋转方向
         lv_disp_rotation_t new_rotation = get_rotation_from_acce_y(acce_value.y);
-        
+
         // 如果旋转方向发生变化，更新LVGL显示
-        if (new_rotation != current_rotation) {
-            ESP_LOGI(LOG_TAG, "Flip detected! Y=%.2f g, rotation changing from %d to %d", 
+        if (new_rotation != current_rotation)
+        {
+            ESP_LOGI(LOG_TAG, "Flip detected! Y=%.2f g, rotation changing from %d to %d",
                      acce_value.y, current_rotation, new_rotation);
-            
+
             current_rotation = new_rotation;
-            
+
             // 更新LVGL显示旋转
-            if (lvgl_display != NULL) {
-                _lock_acquire(&lvgl_api_lock);
-                lv_display_set_rotation(lvgl_display, current_rotation);
-                _lock_release(&lvgl_api_lock);
-                ESP_LOGI(LOG_TAG, "LVGL display rotation updated to %d", current_rotation);
-            }
+            lvgl_user_set_rotation(current_rotation);
+            ESP_LOGI(LOG_TAG, "LVGL display rotation updated to %d", current_rotation);
         }
 
         vTaskDelay(pdMS_TO_TICKS(FLIP_DETECTION_PERIOD_MS));
@@ -628,7 +666,8 @@ static void flip_detection_task(void *args)
 
 void imu_start_flip_detection_task(void)
 {
-    if (flip_detection_task_handle == NULL) {
+    if (flip_detection_task_handle == NULL)
+    {
         xTaskCreate(flip_detection_task, "imu_flip_detection", 4096, NULL, 3, &flip_detection_task_handle);
         ESP_LOGI(LOG_TAG, "Flip detection task created");
     }
@@ -636,7 +675,8 @@ void imu_start_flip_detection_task(void)
 
 void imu_stop_flip_detection_task(void)
 {
-    if (flip_detection_task_handle != NULL) {
+    if (flip_detection_task_handle != NULL)
+    {
         vTaskDelete(flip_detection_task_handle);
         flip_detection_task_handle = NULL;
         ESP_LOGI(LOG_TAG, "Flip detection task stopped");

@@ -18,6 +18,7 @@
 #include "lvgl_indev.h"
 #include "stcc4.h"
 #include "pcf85263a.h"
+#include "imu.h"
 
 #define TAG "main"
 
@@ -27,6 +28,7 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw96103_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(imu_init(I2C_NUM_0));
     aw96103_register_key_event_cb(aw_touch_key_event_cb, NULL);
     spi_shared_lock_init();
     ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_init());
@@ -40,4 +42,5 @@ void app_main(void)
     ui_init();
     lvgl_indev_init();
     _lock_release(&lvgl_api_lock);
+    imu_start_flip_detection_task();
 }

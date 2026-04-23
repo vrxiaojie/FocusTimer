@@ -21,7 +21,29 @@ _lock_t lvgl_api_lock;
 lv_display_t *lvgl_display = NULL;
 static uint8_t panel_buffer[LCD_H_RES * LCD_V_RES / 8];
 static SemaphoreHandle_t s_lcd_flush_done_sem = NULL;
-volatile lv_disp_rotation_t display_rotation = LV_DISPLAY_ROTATION_90;
+static lv_disp_rotation_t display_rotation = LV_DISPLAY_ROTATION_90;
+
+void lvgl_user_set_rotation(lv_disp_rotation_t rotation)
+{
+    if (lvgl_display == NULL)
+    {
+        display_rotation = rotation;
+        return;
+    }
+
+    _lock_acquire(&lvgl_api_lock);
+
+    if (display_rotation != rotation)
+    {
+        display_rotation = rotation;
+
+        // Force a full redraw immediately so new rotation mapping is flushed at once.
+        lv_obj_invalidate(lv_screen_active());
+        lv_refr_now(lvgl_display);
+    }
+
+    _lock_release(&lvgl_api_lock);
+}
 
 static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t io_panel, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
 {
