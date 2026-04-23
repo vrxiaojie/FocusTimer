@@ -186,6 +186,48 @@ static void setting_set_editing_state(uint8_t field, bool editing)
     }
 }
 
+static bool setting_is_leap_year(uint16_t year)
+{
+    return ((year % 4U == 0U) && ((year % 100U != 0U) || (year % 400U == 0U)));
+}
+
+static int32_t setting_days_in_month(uint16_t year, uint8_t month)
+{
+    switch (month)
+    {
+    case 1:
+    case 3:
+    case 5:
+    case 7:
+    case 8:
+    case 10:
+    case 12:
+        return 31;
+    case 4:
+    case 6:
+    case 9:
+    case 11:
+        return 30;
+    case 2:
+        return setting_is_leap_year(year) ? 29 : 28;
+    default:
+        return 31;
+    }
+}
+
+static void setting_adjust_day_for_month_year(void)
+{
+    int32_t year = setting_get_field_value(SETTING_FIELD_YEAR);
+    int32_t month = setting_get_field_value(SETTING_FIELD_MONTH);
+    int32_t day = setting_get_field_value(SETTING_FIELD_DAY);
+    int32_t max_day = setting_days_in_month((uint16_t)year, (uint8_t)month);
+
+    if (day < 1 || day > max_day)
+    {
+        setting_set_field_value(SETTING_FIELD_DAY, 1);
+    }
+}
+
 void handle_setting_date_btn_event(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -200,6 +242,7 @@ void handle_setting_date_btn_event(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         bool same_field = (s_setting_active_field == (int8_t)field);
+        bool was_editing = s_setting_editing;
         if (same_field)
         {
             s_setting_editing = !s_setting_editing;
@@ -222,6 +265,10 @@ void handle_setting_date_btn_event(lv_event_t *e)
         setting_set_editing_state(field, s_setting_editing);
         if (!s_setting_editing)
         {
+            if (was_editing && field == SETTING_FIELD_MONTH)
+            {
+                setting_adjust_day_for_month_year();
+            }
             s_setting_active_field = -1;
         }
         return;
@@ -250,6 +297,25 @@ void handle_setting_date_btn_event(lv_event_t *e)
         }
 
         int32_t value = setting_get_field_value(field);
+        if (field == SETTING_FIELD_DAY)
+        {
+            int32_t year = setting_get_field_value(SETTING_FIELD_YEAR);
+            int32_t month = setting_get_field_value(SETTING_FIELD_MONTH);
+            int32_t max_day = setting_days_in_month((uint16_t)year, (uint8_t)month);
+
+            value += delta;
+            if (value > max_day)
+            {
+                value = 1;
+            }
+            else if (value < 1)
+            {
+                value = max_day;
+            }
+            setting_set_field_value(field, value);
+            return;
+        }
+
         setting_set_field_value(field, value + delta);
         return;
     }
