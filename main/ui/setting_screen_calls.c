@@ -1,4 +1,5 @@
 #include "setting_screen_calls.h"
+#include "main_screen_calls.h"
 #include <stdio.h>
 #include <stdbool.h>
 #include "lvgl.h"
@@ -323,5 +324,6 @@ void handle_setting_screen_load_unload_event(lv_event_t *e)
         {
             ESP_LOGW(TAG, "Failed to write RTC datetime: %s", esp_err_to_name(err));
         }
+        update_main_screen_date_labels(false); // 设置完后立即在主屏幕上更新
     }
 }
