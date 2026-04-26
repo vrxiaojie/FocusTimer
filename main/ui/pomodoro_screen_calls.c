@@ -14,11 +14,14 @@
 #include "imu.h"
 
 #define POMODORO_SCREEN_UPDATE_MS 1000
+#define POMODORO_FLIP_CHECK_MS    1000
 
 static const char *TAG = "pomodoro_screen";
 static TaskHandle_t s_pomodoro_screen_update_task_handle = NULL;
 static esp_timer_handle_t s_pomodoro_countdown_timer_handle = NULL;
+static esp_timer_handle_t s_pomodoro_flip_check_timer_handle = NULL;
 static bool s_update_task_exit_requested = false;
+static bool s_countdown_timer_running = false;
 
 // 番茄钟状态
 typedef enum
@@ -45,6 +48,42 @@ static portMUX_TYPE s_pomodoro_lock = portMUX_INITIALIZER_UNLOCKED;
 static void pomodoro_play_timeout_audio_todo(void)
 {
     // TODO: 接入音频播放 API，在倒计时结束时播放提示音。
+}
+
+static void pomodoro_update_countdown_timer_locked(void)
+{
+    if (s_pomodoro_countdown_timer_handle == NULL)
+    {
+        return;
+    }
+
+    bool should_run = (!s_is_paused) && (!s_waiting_transition_confirm);
+
+    if (should_run && !s_countdown_timer_running)
+    {
+        esp_err_t err = esp_timer_start_periodic(s_pomodoro_countdown_timer_handle,
+                                                 (uint64_t)POMODORO_SCREEN_UPDATE_MS * 1000ULL);
+        if (err == ESP_OK)
+        {
+            s_countdown_timer_running = true;
+        }
+        else if (err != ESP_ERR_INVALID_STATE)
+        {
+            ESP_LOGE(TAG, "Failed to start countdown timer: %s", esp_err_to_name(err));
+        }
+    }
+    else if (!should_run && s_countdown_timer_running)
+    {
+        esp_err_t err = esp_timer_stop(s_pomodoro_countdown_timer_handle);
+        if (err == ESP_OK)
+        {
+            s_countdown_timer_running = false;
+        }
+        else if (err != ESP_ERR_INVALID_STATE)
+        {
+            ESP_LOGE(TAG, "Failed to stop countdown timer: %s", esp_err_to_name(err));
+        }
+    }
 }
 
 static void pomodoro_notify_ui_task(void)
@@ -86,6 +125,7 @@ static void pomodoro_timeout_message_confirm_cb(void *user_data)
     s_waiting_transition_confirm = false;
     s_timeout_message_pending = false;
     s_is_paused = true;
+    pomodoro_update_countdown_timer_locked();
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
     pomodoro_notify_ui_task();
@@ -180,17 +220,37 @@ static void pomodoro_countdown_timer_cb(void *arg)
             s_waiting_transition_confirm = true;
             s_is_paused = true;
             s_timeout_message_pending = true;
+            s_countdown_timer_running = false;
         }
     }
     portEXIT_CRITICAL(&s_pomodoro_lock);
-
     pomodoro_notify_ui_task();
+}
+
+static void pomodoro_flip_check_timer_cb(void *arg)
+{
+    (void)arg;
+    static lv_disp_rotation_t s_last_imu_rotation = LV_DISP_ROTATION_0;
+    static bool s_flip_rotation_initialized = false;
+
+    lv_disp_rotation_t imu_rotation = lvgl_user_get_rotation();
+    if (!s_flip_rotation_initialized)
+    {
+        s_last_imu_rotation = imu_rotation;
+        s_flip_rotation_initialized = true;
+        return;
+    }
+
+    if (imu_rotation != s_last_imu_rotation)
+    {
+        s_last_imu_rotation = imu_rotation;
+        pomodoro_screen_toggle_pause();
+    }
 }
 
 static void pomodoro_screen_update_task(void *arg)
 {
     (void)arg;
-    lv_disp_rotation_t last_imu_rotation = lvgl_user_get_rotation();
     pomodoro_notify_ui_task();
 
     while (1)
@@ -201,7 +261,6 @@ static void pomodoro_screen_update_task(void *arg)
         }
 
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
         if (s_update_task_exit_requested)
         {
             break;
@@ -219,15 +278,6 @@ static void pomodoro_screen_update_task(void *arg)
             s_timeout_message_pending = false;
         }
         portEXIT_CRITICAL(&s_pomodoro_lock);
-
-        // 通过IMU翻转切换开始/暂停：仅在方向发生变化时触发一次
-        lv_disp_rotation_t imu_rotation = lvgl_user_get_rotation();
-        if (imu_rotation != last_imu_rotation)
-        {
-            last_imu_rotation = imu_rotation;
-            pomodoro_screen_toggle_pause();
-            // ESP_LOGI(TAG, "Pomodoro toggled by flip, rotation=%d", imu_rotation);
-        }
 
         if (show_timeout_message)
         {
@@ -274,11 +324,11 @@ void pomodoro_screen_start_update_task(void)
 
     if (s_pomodoro_countdown_timer_handle == NULL)
     {
-        const esp_timer_create_args_t timer_args = {
+        const esp_timer_create_args_t countdown_timer_args = {
             .callback = pomodoro_countdown_timer_cb,
             .name = "pomodoro_tick",
         };
-        esp_err_t err = esp_timer_create(&timer_args, &s_pomodoro_countdown_timer_handle);
+        esp_err_t err = esp_timer_create(&countdown_timer_args, &s_pomodoro_countdown_timer_handle);
         if (err != ESP_OK)
         {
             ESP_LOGE(TAG, "Failed to create countdown timer: %s", esp_err_to_name(err));
@@ -288,10 +338,34 @@ void pomodoro_screen_start_update_task(void)
         }
     }
 
-    esp_err_t err = esp_timer_start_periodic(s_pomodoro_countdown_timer_handle, (uint64_t)POMODORO_SCREEN_UPDATE_MS * 1000ULL);
+    if (s_pomodoro_flip_check_timer_handle == NULL)
+    {
+        const esp_timer_create_args_t flip_timer_args = {
+            .callback = pomodoro_flip_check_timer_cb,
+            .name = "pomodoro_flip",
+        };
+        esp_err_t err = esp_timer_create(&flip_timer_args, &s_pomodoro_flip_check_timer_handle);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to create flip timer: %s", esp_err_to_name(err));
+            (void)esp_timer_delete(s_pomodoro_countdown_timer_handle);
+            s_pomodoro_countdown_timer_handle = NULL;
+            vTaskDelete(s_pomodoro_screen_update_task_handle);
+            s_pomodoro_screen_update_task_handle = NULL;
+            return;
+        }
+    }
+
+    portENTER_CRITICAL(&s_pomodoro_lock);
+    s_countdown_timer_running = false;
+    s_pomodoro_countdown_timer_handle = s_pomodoro_countdown_timer_handle;
+    pomodoro_update_countdown_timer_locked();
+    portEXIT_CRITICAL(&s_pomodoro_lock);
+
+    esp_err_t err = esp_timer_start_periodic(s_pomodoro_flip_check_timer_handle, (uint64_t)POMODORO_FLIP_CHECK_MS * 1000ULL);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to start countdown timer: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Failed to start flip timer: %s", esp_err_to_name(err));
     }
 
     pomodoro_notify_ui_task();
@@ -300,6 +374,9 @@ void pomodoro_screen_start_update_task(void)
 
 void pomodoro_screen_stop_update_task(void)
 {
+    s_update_task_exit_requested = true;
+    s_countdown_timer_running = false;
+
     if (s_pomodoro_countdown_timer_handle != NULL)
     {
         (void)esp_timer_stop(s_pomodoro_countdown_timer_handle);
@@ -307,19 +384,18 @@ void pomodoro_screen_stop_update_task(void)
         s_pomodoro_countdown_timer_handle = NULL;
     }
 
+    if (s_pomodoro_flip_check_timer_handle != NULL)
+    {
+        (void)esp_timer_stop(s_pomodoro_flip_check_timer_handle);
+        (void)esp_timer_delete(s_pomodoro_flip_check_timer_handle);
+        s_pomodoro_flip_check_timer_handle = NULL;
+    }
+
     if (s_pomodoro_screen_update_task_handle != NULL)
     {
-        TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
-        if (current_task == s_pomodoro_screen_update_task_handle)
-        {
-            s_update_task_exit_requested = true;
-            s_pomodoro_screen_update_task_handle = NULL;
-        }
-        else
-        {
-            vTaskDelete(s_pomodoro_screen_update_task_handle);
-            s_pomodoro_screen_update_task_handle = NULL;
-        }
+        TaskHandle_t task_handle = s_pomodoro_screen_update_task_handle;
+        s_pomodoro_screen_update_task_handle = NULL;
+        xTaskNotifyGive(task_handle);
     }
 
     // ESP_LOGI(TAG, "Pomodoro screen update task stopped");
@@ -335,6 +411,7 @@ void pomodoro_screen_toggle_pause(void)
         return;
     }
     s_is_paused = !s_is_paused;
+    pomodoro_update_countdown_timer_locked();
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
     pomodoro_notify_ui_task();
@@ -355,6 +432,7 @@ void pomodoro_screen_reset(void)
     {
         s_remaining_seconds = REST_TIME_MINUTES * 60;
     }
+    pomodoro_update_countdown_timer_locked();
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
     pomodoro_notify_ui_task();
@@ -368,6 +446,7 @@ void pomodoro_screen_skip(void)
     s_is_paused = true;
     s_waiting_transition_confirm = false;
     s_timeout_message_pending = false;
+    pomodoro_update_countdown_timer_locked();
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
     pomodoro_notify_ui_task();
