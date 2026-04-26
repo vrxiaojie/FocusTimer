@@ -625,7 +625,7 @@ static void flip_detection_task(void *args)
     icm42670_value_t acce_value;
     esp_err_t ret;
 
-    ESP_LOGI(LOG_TAG, "Flip detection task started");
+    // ESP_LOGI(LOG_TAG, "Flip detection task started");
 
     while (1)
     {
@@ -650,7 +650,7 @@ static void flip_detection_task(void *args)
         // 如果旋转方向发生变化，更新LVGL显示
         if (new_rotation != current_rotation)
         {
-            ESP_LOGI(LOG_TAG, "Flip detected! Y=%.2f g, rotation changing from %d to %d",
+            // ESP_LOGI(LOG_TAG, "Flip detected! Y=%.2f g, rotation changing from %d to %d",
                      acce_value.y, current_rotation, new_rotation);
 
             current_rotation = new_rotation;
@@ -669,7 +669,7 @@ void imu_start_flip_detection_task(void)
     if (flip_detection_task_handle == NULL)
     {
         xTaskCreate(flip_detection_task, "imu_flip_detection", 4096, NULL, 3, &flip_detection_task_handle);
-        ESP_LOGI(LOG_TAG, "Flip detection task created");
+        // ESP_LOGI(LOG_TAG, "Flip detection task created");
     }
 }
 
@@ -679,6 +679,6 @@ void imu_stop_flip_detection_task(void)
     {
         vTaskDelete(flip_detection_task_handle);
         flip_detection_task_handle = NULL;
-        ESP_LOGI(LOG_TAG, "Flip detection task stopped");
+        // ESP_LOGI(LOG_TAG, "Flip detection task stopped");
     }
 }
