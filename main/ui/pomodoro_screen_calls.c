@@ -11,6 +11,7 @@
 #include "screens.h"
 #include "message_screen_calls.h"
 #include "pomodoro_screen_calls.h"
+#include "imu.h"
 
 #define POMODORO_SCREEN_UPDATE_MS 1000
 
@@ -164,7 +165,6 @@ static void update_pomodoro_labels_locked(void)
 static void pomodoro_countdown_timer_cb(void *arg)
 {
     (void)arg;
-    bool should_notify_ui = false;
 
     portENTER_CRITICAL(&s_pomodoro_lock);
     if (!s_is_paused && !s_waiting_transition_confirm)
@@ -172,7 +172,6 @@ static void pomodoro_countdown_timer_cb(void *arg)
         if (s_remaining_seconds > 0)
         {
             s_remaining_seconds--;
-            should_notify_ui = true;
         }
 
         if (s_remaining_seconds == 0)
@@ -181,20 +180,17 @@ static void pomodoro_countdown_timer_cb(void *arg)
             s_waiting_transition_confirm = true;
             s_is_paused = true;
             s_timeout_message_pending = true;
-            should_notify_ui = true;
         }
     }
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
-    if (should_notify_ui)
-    {
-        pomodoro_notify_ui_task();
-    }
+    pomodoro_notify_ui_task();
 }
 
 static void pomodoro_screen_update_task(void *arg)
 {
     (void)arg;
+    lv_disp_rotation_t last_imu_rotation = lvgl_user_get_rotation();
     pomodoro_notify_ui_task();
 
     while (1)
@@ -223,6 +219,15 @@ static void pomodoro_screen_update_task(void *arg)
             s_timeout_message_pending = false;
         }
         portEXIT_CRITICAL(&s_pomodoro_lock);
+
+        // 通过IMU翻转切换开始/暂停：仅在方向发生变化时触发一次
+        lv_disp_rotation_t imu_rotation = lvgl_user_get_rotation();
+        if (imu_rotation != last_imu_rotation)
+        {
+            last_imu_rotation = imu_rotation;
+            pomodoro_screen_toggle_pause();
+            // ESP_LOGI(TAG, "Pomodoro toggled by flip, rotation=%d", imu_rotation);
+        }
 
         if (show_timeout_message)
         {
@@ -290,7 +295,7 @@ void pomodoro_screen_start_update_task(void)
     }
 
     pomodoro_notify_ui_task();
-    ESP_LOGI(TAG, "Pomodoro screen update task started");
+    // ESP_LOGI(TAG, "Pomodoro screen update task started");
 }
 
 void pomodoro_screen_stop_update_task(void)
@@ -317,7 +322,7 @@ void pomodoro_screen_stop_update_task(void)
         }
     }
 
-    ESP_LOGI(TAG, "Pomodoro screen update task stopped");
+    // ESP_LOGI(TAG, "Pomodoro screen update task stopped");
 }
 
 void pomodoro_screen_toggle_pause(void)
@@ -326,15 +331,14 @@ void pomodoro_screen_toggle_pause(void)
     if (s_waiting_transition_confirm)
     {
         portEXIT_CRITICAL(&s_pomodoro_lock);
-        ESP_LOGI(TAG, "Pomodoro waiting for confirmation");
+        // ESP_LOGI(TAG, "Pomodoro waiting for confirmation");
         return;
     }
     s_is_paused = !s_is_paused;
-    bool is_paused = s_is_paused;
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
     pomodoro_notify_ui_task();
-    ESP_LOGI(TAG, "Pomodoro %s", is_paused ? "paused" : "resumed");
+    // ESP_LOGI(TAG, "Pomodoro %s", s_is_paused ? "paused" : "resumed");
 }
 
 void pomodoro_screen_reset(void)
@@ -354,7 +358,7 @@ void pomodoro_screen_reset(void)
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
     pomodoro_notify_ui_task();
-    ESP_LOGI(TAG, "Pomodoro reset");
+    // ESP_LOGI(TAG, "Pomodoro reset");
 }
 
 void pomodoro_screen_skip(void)
@@ -367,5 +371,5 @@ void pomodoro_screen_skip(void)
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
     pomodoro_notify_ui_task();
-    ESP_LOGI(TAG, "Pomodoro skipped to next state");
+    // ESP_LOGI(TAG, "Pomodoro skipped to next state");
 }

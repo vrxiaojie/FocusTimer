@@ -6,6 +6,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "lvgl.h"
+#include "lvgl_user.h"
 
 #define TAG "lvgl_indev"
 
@@ -156,16 +157,33 @@ void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
         taskEXIT_CRITICAL(&s_enc_lock);
         return;
     }
-
-    if (key_index == 0)
+    // 屏幕旋转角度为270度时，交换左右按键的功能
+    lv_disp_rotation_t rotation = lvgl_user_get_rotation();
+    if (rotation == LV_DISPLAY_ROTATION_270)
     {
-        encoder_diff--;
+        // 270度时，交换左右按键功能
+        if (key_index == 0)
+        {
+            encoder_diff++;
+        }
+        else if (key_index == 2)
+        {
+            encoder_diff--;
+        }
     }
-    else if (key_index == 2)
+    else
     {
-        encoder_diff++;
+        // 其他角度保持原逻辑
+        if (key_index == 0)
+        {
+            encoder_diff--;
+        }
+        else if (key_index == 2)
+        {
+            encoder_diff++;
+        }
     }
-    else if (key_index == 1)
+    if (key_index == 1)
     {
         encoder_state = LV_INDEV_STATE_PRESSED;
     }
