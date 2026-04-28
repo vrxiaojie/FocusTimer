@@ -10,6 +10,7 @@
 
 #include "pcf85263a.h"
 #include "stcc4.h"
+#include "battery.h"
 #include "lvgl_user.h"
 #include "screens.h"
 
@@ -98,12 +99,45 @@ static void update_main_screen_labels(const STCC4_value_t *sensor_value)
     char temp_text[16];
     char humid_text[16];
     char co2_text[16];
+    char battery_cap_text[8];
+    const char *battery_icon;
 
     update_main_screen_date_labels(true);
 
     (void)snprintf(temp_text, sizeof(temp_text), "%.1f℃", sensor_value->temperature);
     (void)snprintf(humid_text, sizeof(humid_text), "%.1f%%", sensor_value->relativeHumidity);
     (void)snprintf(co2_text, sizeof(co2_text), "%dppm", sensor_value->co2Concentration);
+
+    // 获取电池状态和电量
+    float capacity = battery_get_capacity();
+    bool charging = battery_is_charging();
+    (void)snprintf(battery_cap_text, sizeof(battery_cap_text), "%d%%", (int)capacity);
+
+    // 根据电量和充电状态选择图标
+    if (charging)
+    {
+        battery_icon = "\xEF\x8D\xB6"; // 0xF376 battery-bolt
+    }
+    else if (capacity >= 95.0f)
+    {
+        battery_icon = "\xEF\x89\x80"; // 0xF240 battery-full
+    }
+    else if (capacity >= 70.0f)
+    {
+        battery_icon = "\xEF\x89\x81"; // 0xF241 battery-three-quarters
+    }
+    else if (capacity >= 45.0f)
+    {
+        battery_icon = "\xEF\x89\x82"; // 0xF242 battery-half
+    }
+    else if (capacity >= 20.0f)
+    {
+        battery_icon = "\xEF\x89\x83"; // 0xF243 battery-quarter
+    }
+    else
+    {
+        battery_icon = "\xEF\x89\x84"; // 0xF244 battery-empty
+    }
 
     _lock_acquire(&lvgl_api_lock);
     if (objects.main_scr_temp_value_label != NULL)
@@ -117,6 +151,14 @@ static void update_main_screen_labels(const STCC4_value_t *sensor_value)
     if (objects.main_scr_co2_value_label != NULL)
     {
         lv_label_set_text(objects.main_scr_co2_value_label, co2_text);
+    }
+    if (objects.main_scr_battery_status_label != NULL)
+    {
+        lv_label_set_text(objects.main_scr_battery_status_label, battery_icon);
+    }
+    if (objects.main_scr_battery_capacity_label != NULL)
+    {
+        lv_label_set_text(objects.main_scr_battery_capacity_label, battery_cap_text);
     }
     _lock_release(&lvgl_api_lock);
 }

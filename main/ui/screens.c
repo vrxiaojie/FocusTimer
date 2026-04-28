@@ -113,6 +113,26 @@ void create_screen_main() {
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_label_set_text(obj, "星期四");
         }
+        {
+            // main_scr_battery_status_label
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.main_scr_battery_status_label = obj;
+            lv_obj_set_pos(obj, 5, 64);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_font(obj, &ui_font_custom_symbol_fa_pro_regular_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "");
+        }
+        {
+            // main_scr_battery_capacity_label
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.main_scr_battery_capacity_label = obj;
+            lv_obj_set_pos(obj, 27, 64);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_font(obj, &ui_font_siyuanheiti_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "100%");
+        }
     }
     
     tick_screen_main();
@@ -903,6 +923,8 @@ ext_font_desc_t fonts[] = {
     { "Roboto-Condensed-3_40", &ui_font_roboto_condensed_3_40 },
     { "custom_symbol_solid_26", &ui_font_custom_symbol_solid_26 },
     { "custom_symbol_fa-pro_regular_26", &ui_font_custom_symbol_fa_pro_regular_26 },
+    { "custom_symbol_fa-pro_regular_16", &ui_font_custom_symbol_fa_pro_regular_16 },
+    { "siyuanheiti_16", &ui_font_siyuanheiti_16 },
 #if LV_FONT_MONTSERRAT_8
     { "MONTSERRAT_8", &lv_font_montserrat_8 },
 #endif
