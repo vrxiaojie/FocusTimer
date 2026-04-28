@@ -7,6 +7,7 @@
 #include "esp_timer.h"
 #include "esp_log.h"
 
+#include "max98357.h"
 #include "lvgl_user.h"
 #include "screens.h"
 #include "message_screen_calls.h"
@@ -45,9 +46,84 @@ static const uint8_t REST_TIME_MINUTES = 5;
 
 static portMUX_TYPE s_pomodoro_lock = portMUX_INITIALIZER_UNLOCKED;
 
+static bool s_audio_task_running = false;
+
+static void pomodoro_timeout_audio_task(void *arg)
+{
+    max98357_handle_t *audio_handle = (max98357_handle_t *)arg;
+    esp_err_t err = max98357_play_wav_from_partition(audio_handle, "audio", 4000);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "timeout audio play failed: %s", esp_err_to_name(err));
+    }
+
+    portENTER_CRITICAL(&s_pomodoro_lock);
+    s_audio_task_running = false;
+    portEXIT_CRITICAL(&s_pomodoro_lock);
+    vTaskDelete(NULL);
+}
+
 static void pomodoro_play_timeout_audio_todo(void)
 {
-    // TODO: 接入音频播放 API，在倒计时结束时播放提示音。
+    static max98357_handle_t s_audio_handle = {0};
+    static bool s_audio_inited = false;
+    bool audio_task_running;
+
+    portENTER_CRITICAL(&s_pomodoro_lock);
+    audio_task_running = s_audio_task_running;
+    if (!audio_task_running)
+    {
+        s_audio_task_running = true;
+    }
+    portEXIT_CRITICAL(&s_pomodoro_lock);
+
+    if (audio_task_running)
+    {
+        return;
+    }
+
+    if (!s_audio_inited)
+    {
+        max98357_config_t cfg;
+        max98357_get_default_config(&cfg);
+        cfg.volume_percent = 15;
+        cfg.stream_buffer_bytes = 1024;
+
+        if (max98357_set_config(&s_audio_handle, &cfg) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "set audio config failed");
+            portENTER_CRITICAL(&s_pomodoro_lock);
+            s_audio_task_running = false;
+            portEXIT_CRITICAL(&s_pomodoro_lock);
+            return;
+        }
+
+        if (max98357_init(&s_audio_handle) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "audio init failed");
+            portENTER_CRITICAL(&s_pomodoro_lock);
+            s_audio_task_running = false;
+            portEXIT_CRITICAL(&s_pomodoro_lock);
+            return;
+        }
+        s_audio_inited = true;
+    }
+
+    BaseType_t task_created = xTaskCreate(
+        pomodoro_timeout_audio_task,
+        "pomodoro_audio",
+        4096,
+        &s_audio_handle,
+        4,
+        NULL);
+
+    if (task_created != pdPASS)
+    {
+        portENTER_CRITICAL(&s_pomodoro_lock);
+        s_audio_task_running = false;
+        portEXIT_CRITICAL(&s_pomodoro_lock);
+        ESP_LOGE(TAG, "create timeout audio task failed");
+    }
 }
 
 static void pomodoro_update_countdown_timer_locked(void)

@@ -9,6 +9,7 @@
 
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_partition.h"
 #include "pinmap.h"
 #include "spi_shared_lock.h"
 
@@ -358,4 +359,140 @@ esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
     s_cleanup_tx_channel(handle);
 
     return ESP_OK;
+}
+
+esp_err_t max98357_play_wav_from_partition(max98357_handle_t *handle, const char *partition_label, uint32_t max_play_ms)
+{
+    if (handle == NULL || partition_label == NULL || !handle->initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, partition_label);
+    if (part == NULL) {
+        ESP_LOGE(TAG, "Partition not found: %s", partition_label);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if (part->size < 44) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    uint8_t header[44];
+    esp_err_t ret = esp_partition_read(part, 0, header, sizeof(header));
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    if (memcmp(header, "RIFF", 4) != 0 || memcmp(&header[8], "WAVE", 4) != 0 || memcmp(&header[12], "fmt ", 4) != 0 || memcmp(&header[36], "data", 4) != 0) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    uint16_t audio_format = (uint16_t)(header[20] | (header[21] << 8));
+    uint16_t num_channels = (uint16_t)(header[22] | (header[23] << 8));
+    uint32_t sample_rate = (uint32_t)(header[24] | (header[25] << 8) | (header[26] << 16) | (header[27] << 24));
+    uint16_t bits_per_sample = (uint16_t)(header[34] | (header[35] << 8));
+    uint32_t data_size = (uint32_t)(header[40] | (header[41] << 8) | (header[42] << 16) | (header[43] << 24));
+
+    if (audio_format != 1 || bits_per_sample != 16 || (num_channels != 1 && num_channels != 2)) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    uint32_t bytes_per_second = sample_rate * num_channels * (bits_per_sample / 8U);
+    if (bytes_per_second == 0) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    if (44U + data_size > part->size) {
+        data_size = part->size - 44U;
+    }
+
+    uint32_t max_bytes = data_size;
+    if (max_play_ms > 0) {
+        uint64_t bytes_by_time = ((uint64_t)bytes_per_second * max_play_ms) / 1000ULL;
+        if (bytes_by_time < max_bytes) {
+            max_bytes = (uint32_t)bytes_by_time;
+        }
+    }
+    max_bytes &= ~1U;
+
+    i2s_slot_mode_t slot_mode = (num_channels == 2) ? I2S_SLOT_MODE_STEREO : I2S_SLOT_MODE_MONO;
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(handle->config.i2s_port, I2S_ROLE_MASTER);
+    ret = i2s_new_channel(&chan_cfg, &handle->tx_chan, NULL);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    i2s_std_config_t std_cfg = {
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, slot_mode),
+        .gpio_cfg = {
+            .mclk = I2S_GPIO_UNUSED,
+            .bclk = handle->config.pin_bclk,
+            .ws = handle->config.pin_ws,
+            .dout = handle->config.pin_dout,
+            .din = I2S_GPIO_UNUSED,
+            .invert_flags = {
+                .mclk_inv = false,
+                .bclk_inv = false,
+                .ws_inv = false,
+            },
+        },
+    };
+
+    ret = i2s_channel_init_std_mode(handle->tx_chan, &std_cfg);
+    if (ret != ESP_OK) {
+        s_cleanup_tx_channel(handle);
+        return ret;
+    }
+
+    ret = i2s_channel_enable(handle->tx_chan);
+    if (ret != ESP_OK) {
+        s_cleanup_tx_channel(handle);
+        return ret;
+    }
+
+    ret = max98357_set_enabled(handle, true);
+    if (ret != ESP_OK) {
+        s_cleanup_tx_channel(handle);
+        return ret;
+    }
+
+    uint8_t *buffer = malloc(handle->config.stream_buffer_bytes);
+    if (buffer == NULL) {
+        (void)max98357_set_enabled(handle, false);
+        s_cleanup_tx_channel(handle);
+        return ESP_ERR_NO_MEM;
+    }
+
+    uint32_t offset = 44;
+    uint32_t remaining = max_bytes;
+    while (remaining > 0) {
+        size_t req = remaining > handle->config.stream_buffer_bytes ? handle->config.stream_buffer_bytes : remaining;
+        req &= ~1U;
+        if (req == 0) {
+            break;
+        }
+
+        ret = esp_partition_read(part, offset, buffer, req);
+        if (ret != ESP_OK) {
+            break;
+        }
+
+        s_apply_volume_16bit((int16_t *)buffer, req / sizeof(int16_t), handle->config.volume_percent);
+
+        size_t bytes_written = 0;
+        ret = i2s_channel_write(handle->tx_chan, buffer, req, &bytes_written, portMAX_DELAY);
+        if (ret != ESP_OK) {
+            break;
+        }
+
+        offset += (uint32_t)req;
+        remaining -= (uint32_t)req;
+    }
+
+    free(buffer);
+    (void)max98357_set_enabled(handle, false);
+    s_cleanup_tx_channel(handle);
+
+    return ret;
 }

@@ -39,6 +39,8 @@ esp_err_t max98357_set_enabled(max98357_handle_t *handle, bool enable);
 
 esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path);
 
+esp_err_t max98357_play_wav_from_partition(max98357_handle_t *handle, const char *partition_label, uint32_t max_play_ms);
+
 #ifdef __cplusplus
 }
 #endif
