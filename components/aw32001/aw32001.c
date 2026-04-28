@@ -14,6 +14,9 @@ static QueueHandle_t gpio_evt_queue = NULL;
 static i2c_master_dev_handle_t dev_handle = NULL;
 aw32001_sys_status_t pwr_sys_status = {};
 
+static aw32001_shipping_mode_cb_t s_shipping_mode_cb = NULL;
+static void *s_shipping_mode_cb_user_data = NULL;
+
 esp_err_t aw32001_init(i2c_port_num_t port_num)
 {
     i2c_master_bus_handle_t bus_handle;
@@ -526,6 +529,12 @@ static void pwr_key_monitor_task(void *arg)
                 {
                     ESP_LOGW(TAG, "Power key long press detected (%d ms), entering shipping mode...", press_duration_ms);
 
+                    // 调用回调函数（显示关机提示等）
+                    if (s_shipping_mode_cb != NULL)
+                    {
+                        s_shipping_mode_cb(s_shipping_mode_cb_user_data);
+                    }
+
                     // 进入shipping mode
                     esp_err_t err = aw32001_enter_shipping_mode();
                     if (err != ESP_OK)
@@ -580,4 +589,10 @@ void aw32001_power_key_init(void)
     xTaskCreate(pwr_key_monitor_task, "pwr_key_monitor", 2048, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "Power key interrupt initialized, pin=%d", PWR_KEY_PIN);
+}
+
+void aw32001_register_shipping_mode_cb(aw32001_shipping_mode_cb_t cb, void *user_data)
+{
+    s_shipping_mode_cb = cb;
+    s_shipping_mode_cb_user_data = user_data;
 }

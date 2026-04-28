@@ -57,6 +57,9 @@ typedef struct
 
 extern aw32001_sys_status_t pwr_sys_status;
 
+// 回调函数类型定义
+typedef void (*aw32001_shipping_mode_cb_t)(void *user_data);
+
 esp_err_t aw32001_init(i2c_port_num_t port_num);
 esp_err_t aw32001_read_reg(uint8_t reg_addr, uint8_t *reg_val);
 esp_err_t aw32001_write_reg(uint8_t reg_addr, uint8_t reg_val);
@@ -75,3 +78,4 @@ esp_err_t aw32001_enter_shipping_mode();
 esp_err_t aw32001_set_vsys_reg(float sys_reg_voltage);
 void aw32001_interrupt_init();
 void aw32001_power_key_init(void);
+void aw32001_register_shipping_mode_cb(aw32001_shipping_mode_cb_t cb, void *user_data);
