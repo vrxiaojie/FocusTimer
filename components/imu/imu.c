@@ -651,13 +651,13 @@ static void flip_detection_task(void *args)
         if (new_rotation != current_rotation)
         {
             // ESP_LOGI(LOG_TAG, "Flip detected! Y=%.2f g, rotation changing from %d to %d",
-                     acce_value.y, current_rotation, new_rotation);
+                    //  acce_value.y, current_rotation, new_rotation);
 
             current_rotation = new_rotation;
 
             // 更新LVGL显示旋转
             lvgl_user_set_rotation(current_rotation);
-            ESP_LOGI(LOG_TAG, "LVGL display rotation updated to %d", current_rotation);
+            // ESP_LOGI(LOG_TAG, "LVGL display rotation updated to %d", current_rotation);
         }
 
         vTaskDelay(pdMS_TO_TICKS(FLIP_DETECTION_PERIOD_MS));

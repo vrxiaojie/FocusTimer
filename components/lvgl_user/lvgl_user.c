@@ -21,7 +21,7 @@ _lock_t lvgl_api_lock;
 lv_display_t *lvgl_display = NULL;
 static uint8_t panel_buffer[LCD_H_RES * LCD_V_RES / 8];
 static SemaphoreHandle_t s_lcd_flush_done_sem = NULL;
-static lv_disp_rotation_t display_rotation = LV_DISPLAY_ROTATION_90;
+static volatile lv_disp_rotation_t display_rotation = LV_DISPLAY_ROTATION_90;
 
 lv_disp_rotation_t lvgl_user_get_rotation(void)
 {
