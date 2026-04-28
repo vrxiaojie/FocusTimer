@@ -34,6 +34,8 @@ typedef struct _objects_t {
     lv_obj_t *main_scr_co2_value_label;
     lv_obj_t *main_scr_date_value_label;
     lv_obj_t *main_scr_dayofweek_value_label;
+    lv_obj_t *main_scr_battery_status_label;
+    lv_obj_t *main_scr_battery_capacity_label;
     lv_obj_t *submain_back_to_main_btn;
     lv_obj_t *submain_scr_enter_pomodoro_btn;
     lv_obj_t *submain_scr_enter_setting_btn;
