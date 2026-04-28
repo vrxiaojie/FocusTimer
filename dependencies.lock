@@ -1,4 +1,28 @@
 dependencies:
+  espressif/adc_battery_estimation:
+    component_hash: b915167c87ed5a84b13d680bd011c2ed9a15121f1e247c6903141b9f138f3606
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.2.1
+  espressif/cmake_utilities:
+    component_hash: 05165f30922b422b4b90c08845e6d449329b97370fbd06309803d8cb539d79e3
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.1'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.1.1
   idf:
     source:
       type: idf
@@ -17,8 +41,9 @@ dependencies:
       type: local
     version: '*'
 direct_dependencies:
+- espressif/adc_battery_estimation
 - lvgl/lvgl
 - sd_card
-manifest_hash: bfe002e78fbf2c011e6229253a1c2d94bfee29f379521292730be5d27da8891a
+manifest_hash: 2172a9a4d65c939f0199fadca5c36e0519672cd2cb830098861f50dd10f35b05
 target: esp32h2
 version: 2.0.0
