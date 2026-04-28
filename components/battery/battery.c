@@ -18,8 +18,10 @@
 #define BATTERY_DETECT_INTERVAL_MS (60000)
 
 /*
- * 注意：下面 ADC / 分压参数需按硬件原理图校准。
+ * 测量前临时关闭充电，等待电压回落后再采样，以获取接近真实 OCV 的电压。
  */
+#define BATTERY_CHARGE_PAUSE_MS (150)
+
 #define BATTERY_ADC_UNIT (ADC_UNIT_1)
 #define BATTERY_ADC_BITWIDTH (ADC_BITWIDTH_DEFAULT)
 #define BATTERY_ADC_ATTEN (ADC_ATTEN_DB_2_5)
@@ -45,15 +47,12 @@ static bool battery_charging_detect_cb(void *user_data)
     }
 
     /*
-     * 依据 AW32001 REG08H CHG_STAT 位判断：
-     * 00: Not Charging
-     * 01: Pre Charge
-     * 02: Fast Charge
-     * 03: Charge Done
-     *
-     * 其中 01/02/03 视为已插入充电器（处于充电路径有效）。
+     * 使用 pg_stat（Power Good）判断充电器是否插入，而非 chg_stat。
+     * pg_stat=1 表示输入电源正常（充电器已插入），与充电是否使能无关。
+     * 这样在测量电量临时关闭充电期间，回调仍能正确识别充电器已插入，
+     * 保证 adc_battery_estimation 的容量单调性逻辑正常工作。
      */
-    return (sys_status.chg_stat != AW32001_CHG_STAT_NOT_CHARGING);
+    return sys_status.pg_stat;
 }
 
 static void battery_monitor_task(void *arg)
@@ -65,8 +64,32 @@ static void battery_monitor_task(void *arg)
         float capacity = 0.0f;
         bool is_charging = false;
 
-        esp_err_t err_cap = adc_battery_estimation_get_capacity(s_battery_handle, &capacity);
+        /*
+         * 先查询充电状态，如果正在充电则临时关闭充电再测量。
+         * 充电时电池端电压 = OCV + 充电电流×内阻 + 极化电压，
+         * 直接测量会导致电压偏高、电量高估。
+         * 临时关闭充电等待电压回落后再 ADC 采样，可获取接近真实 OCV 的电压。
+         */
         esp_err_t err_chg = adc_battery_estimation_get_charging_state(s_battery_handle, &is_charging);
+        if (err_chg != ESP_OK)
+        {
+            ESP_LOGW(TAG, "get charging state failed: %s", esp_err_to_name(err_chg));
+        }
+
+        bool charge_was_paused = false;
+        if (is_charging)
+        {
+            aw32001_disable_charge();
+            charge_was_paused = true;
+            vTaskDelay(pdMS_TO_TICKS(BATTERY_CHARGE_PAUSE_MS));
+        }
+
+        esp_err_t err_cap = adc_battery_estimation_get_capacity(s_battery_handle, &capacity);
+
+        if (charge_was_paused)
+        {
+            aw32001_enable_charge();
+        }
 
         if (err_cap == ESP_OK)
         {
@@ -77,14 +100,7 @@ static void battery_monitor_task(void *arg)
             ESP_LOGW(TAG, "get battery capacity failed: %s", esp_err_to_name(err_cap));
         }
 
-        if (err_chg == ESP_OK)
-        {
-            s_is_charging = is_charging;
-        }
-        else
-        {
-            ESP_LOGW(TAG, "get charging state failed: %s", esp_err_to_name(err_chg));
-        }
+        s_is_charging = is_charging;
 
         ESP_LOGI(TAG, "battery capacity=%.1f%%, charging=%s", s_capacity, s_is_charging ? "true" : "false");
 
