@@ -3,8 +3,14 @@
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
+#include "pinmap.h"
 
 #define TAG "AW32001"
+
+#define PWR_KEY_LONG_PRESS_MS 2000 // 长按2秒触发shipping mode
+
+static QueueHandle_t gpio_evt_queue = NULL;
 static i2c_master_dev_handle_t dev_handle = NULL;
 aw32001_sys_status_t pwr_sys_status = {};
 
@@ -16,8 +22,7 @@ esp_err_t aw32001_init(i2c_port_num_t port_num)
     i2c_device_config_t dev_config = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = AW32001_I2C_ADDR,
-        .scl_speed_hz = 400000
-    };
+        .scl_speed_hz = 400000};
 
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &dev_config, &dev_handle));
     ESP_LOGI(TAG, "AW32001 init successfully");
@@ -428,21 +433,34 @@ esp_err_t aw32001_enter_shipping_mode()
         return err;
     }
 
-    // 步骤3：配置运输模式退出时间（默认2s，可选100ms）
+    // 步骤3：配置运输模式退出时间为100ms（REG0BH的BIT0=1）
     err = aw32001_read_reg(AW32001_REG_0BH, &reg_val);
     if (err != ESP_OK)
     {
         return err;
     }
-    reg_val &= 0xFE; // 0xFE = 11111110，设置BIT0=0（退出时间2s）
+    reg_val |= 0x01; // 0x01 = 00000001，设置BIT0=1（退出时间100ms）
     err = aw32001_write_reg(AW32001_REG_0BH, reg_val);
     if (err != ESP_OK)
     {
         return err;
     }
 
-    ESP_LOGI(TAG, "Enter shipping mode success, REG06H = 0x%02X, REG0BH = 0x%02X",
-             reg_val, reg_val);
+    // 步骤4：配置REG22H的BIT3=1，使能按键唤醒功能（配合REG0BH实现100ms唤醒）
+    err = aw32001_read_reg(AW32001_REG_22H, &reg_val);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+    reg_val |= 0x08; // 0x08 = 00001000，设置BIT3=1
+    err = aw32001_write_reg(AW32001_REG_22H, reg_val);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+
+    ESP_LOGI(TAG, "Enter shipping mode success, REG06H=0x%02X, REG0BH=0x%02X, REG22H=0x%02X",
+             0x20, 0x01, reg_val);
     return ESP_OK;
 }
 
@@ -480,4 +498,86 @@ esp_err_t aw32001_set_vsys_reg(float sys_reg_voltage)
 
     ESP_LOGI(TAG, "Set system regulator voltage to %.2f V, REG0AH = 0x%02X", sys_reg_voltage, reg_val);
     return ESP_OK;
+}
+
+static void IRAM_ATTR pwr_key_isr_handler(void *arg)
+{
+    uint32_t gpio_num = (uint32_t)arg;
+    // 禁用中断，防止重复触发（在任务中按键释放后重新使能）
+    gpio_intr_disable(gpio_num);
+    xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
+}
+
+static void pwr_key_monitor_task(void *arg)
+{
+    uint32_t io_num;
+    for (;;)
+    {
+        if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY))
+        {
+            // 收到上升沿中断，按键已按下，开始计时
+            int press_duration_ms = 0;
+            while (gpio_get_level(PWR_KEY_PIN) == 1)
+            {
+                vTaskDelay(pdMS_TO_TICKS(50)); // 每50ms检测一次
+                press_duration_ms += 50;
+
+                if (press_duration_ms >= PWR_KEY_LONG_PRESS_MS)
+                {
+                    ESP_LOGW(TAG, "Power key long press detected (%d ms), entering shipping mode...", press_duration_ms);
+
+                    // 进入shipping mode
+                    esp_err_t err = aw32001_enter_shipping_mode();
+                    if (err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG, "Failed to enter shipping mode: %s", esp_err_to_name(err));
+                    }
+                    else
+                    {
+                        ESP_LOGI(TAG, "Shipping mode entered, system will power off");
+                    }
+
+                    // 等待按键释放或系统关机
+                    while (gpio_get_level(PWR_KEY_PIN) == 1)
+                    {
+                        vTaskDelay(pdMS_TO_TICKS(100));
+                    }
+                    break;
+                }
+            }
+
+            // 按键释放后，重新使能中断
+            gpio_intr_enable(PWR_KEY_PIN);
+        }
+    }
+}
+
+void aw32001_power_key_init(void)
+{
+    // 创建事件队列
+    gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
+
+    // 配置电源按键引脚为输入，上升沿中断
+    gpio_config_t io_conf = {
+        .pin_bit_mask = 1ULL << PWR_KEY_PIN,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE, // 启用下拉，确保空闲时为低电平
+        .intr_type = GPIO_INTR_POSEDGE        // 上升沿触发中断
+    };
+    gpio_config(&io_conf);
+
+    // 安装GPIO中断服务（如果已安装则忽略错误）
+    esp_err_t err = gpio_install_isr_service(0);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
+    {
+        ESP_LOGE(TAG, "GPIO ISR service install failed: %s", esp_err_to_name(err));
+        return;
+    }
+    gpio_isr_handler_add(PWR_KEY_PIN, pwr_key_isr_handler, (void *)(uint32_t)PWR_KEY_PIN);
+
+    // 创建监控任务
+    xTaskCreate(pwr_key_monitor_task, "pwr_key_monitor", 2048, NULL, 5, NULL);
+
+    ESP_LOGI(TAG, "Power key interrupt initialized, pin=%d", PWR_KEY_PIN);
 }

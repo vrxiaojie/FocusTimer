@@ -32,6 +32,7 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(imu_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
+    aw32001_power_key_init(); // 启动电源按键长按检测任务
     aw96103_register_key_event_cb(aw_touch_key_event_cb, NULL);
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
     spi_shared_lock_init();

@@ -74,3 +74,4 @@ esp_err_t aw32001_disable_ntc();
 esp_err_t aw32001_enter_shipping_mode();
 esp_err_t aw32001_set_vsys_reg(float sys_reg_voltage);
 void aw32001_interrupt_init();
+void aw32001_power_key_init(void);
