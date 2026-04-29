@@ -14,6 +14,7 @@ extern const lv_font_t ui_font_custom_symbol_solid_26;
 extern const lv_font_t ui_font_custom_symbol_fa_pro_regular_26;
 extern const lv_font_t ui_font_custom_symbol_fa_pro_regular_16;
 extern const lv_font_t ui_font_siyuanheiti_16;
+extern const lv_font_t ui_font_dyna_puff_medium;
 
 #ifndef EXT_FONT_DESC_T
 #define EXT_FONT_DESC_T

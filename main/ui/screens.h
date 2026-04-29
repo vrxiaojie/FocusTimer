@@ -11,16 +11,18 @@ extern "C" {
 
 enum ScreensEnum {
     _SCREEN_ID_FIRST = 1,
-    SCREEN_ID_MAIN = 1,
-    SCREEN_ID_SUB_MAIN = 2,
-    SCREEN_ID_MP3 = 3,
-    SCREEN_ID_SETTING = 4,
-    SCREEN_ID_POMODORO = 5,
-    SCREEN_ID_MESSAGE = 6,
-    _SCREEN_ID_LAST = 6
+    SCREEN_ID_START = 1,
+    SCREEN_ID_MAIN = 2,
+    SCREEN_ID_SUB_MAIN = 3,
+    SCREEN_ID_MP3 = 4,
+    SCREEN_ID_SETTING = 5,
+    SCREEN_ID_POMODORO = 6,
+    SCREEN_ID_MESSAGE = 7,
+    _SCREEN_ID_LAST = 7
 };
 
 typedef struct _objects_t {
+    lv_obj_t *start;
     lv_obj_t *main;
     lv_obj_t *sub_main;
     lv_obj_t *mp3;
@@ -72,6 +74,9 @@ typedef struct _objects_t {
 } objects_t;
 
 extern objects_t objects;
+
+void create_screen_start();
+void tick_screen_start();
 
 void create_screen_main();
 void tick_screen_main();

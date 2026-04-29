@@ -14,6 +14,7 @@
     "ui_font_custom_symbol_fa_pro_regular_16.c",
     "ui_font_custom_symbol_fa_pro_regular_26.c",
     "ui_font_custom_symbol_solid_26.c",
+    "ui_font_dyna_puff_medium.c",
     "ui_font_roboto_condensed_3_100.c",
     "ui_font_roboto_condensed_3_40.c",
     "ui_font_siyuanheiti_16.c",
