@@ -22,6 +22,31 @@ lv_obj_t *tick_value_change_obj;
 // Screens
 //
 
+void create_screen_start() {
+    lv_obj_t *obj = lv_obj_create(0);
+    objects.start = obj;
+    lv_obj_set_pos(obj, 0, 0);
+    lv_obj_set_size(obj, 384, 168);
+    add_style_screen_style_dark(obj);
+    {
+        lv_obj_t *parent_obj = obj;
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 24, 58);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_font(obj, &ui_font_dyna_puff_medium, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_letter_space(obj, 5, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "FocusTimer");
+        }
+    }
+    
+    tick_screen_start();
+}
+
+void tick_screen_start() {
+}
+
 void create_screen_main() {
     lv_obj_t *obj = lv_obj_create(0);
     objects.main = obj;
@@ -899,6 +924,7 @@ void tick_screen_message() {
 
 typedef void (*tick_screen_func_t)();
 tick_screen_func_t tick_screen_funcs[] = {
+    tick_screen_start,
     tick_screen_main,
     tick_screen_sub_main,
     tick_screen_mp3,
@@ -925,6 +951,7 @@ ext_font_desc_t fonts[] = {
     { "custom_symbol_fa-pro_regular_26", &ui_font_custom_symbol_fa_pro_regular_26 },
     { "custom_symbol_fa-pro_regular_16", &ui_font_custom_symbol_fa_pro_regular_16 },
     { "siyuanheiti_16", &ui_font_siyuanheiti_16 },
+    { "DynaPuff-Medium", &ui_font_dyna_puff_medium },
 #if LV_FONT_MONTSERRAT_8
     { "MONTSERRAT_8", &lv_font_montserrat_8 },
 #endif
@@ -1009,6 +1036,7 @@ void create_screens() {
     
     // Initialize screens
     // Create screens
+    create_screen_start();
     create_screen_main();
     create_screen_sub_main();
     create_screen_mp3();
