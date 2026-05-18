@@ -89,6 +89,7 @@ jobs:
           echo "artifact_dir=$artifact_dir" >> "$GITHUB_OUTPUT"
         id: package
 
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
