@@ -44,26 +44,26 @@ jobs:
           fi
 
           flash_mode="$(python - <<'PY'
-import json
-with open('build/flasher_args.json', 'r', encoding='utf-8') as f:
-    data = json.load(f)
-print(data['flash_settings']['flash_mode'])
-PY
-          )"
-          flash_freq="$(python - <<'PY'
-import json
-with open('build/flasher_args.json', 'r', encoding='utf-8') as f:
-    data = json.load(f)
-print(data['flash_settings']['flash_freq'])
-PY
-          )"
-          flash_size="$(python - <<'PY'
-import json
-with open('build/flasher_args.json', 'r', encoding='utf-8') as f:
-    data = json.load(f)
-print(data['flash_settings']['flash_size'])
-PY
-          )"
+          import json
+          with open('build/flasher_args.json', 'r', encoding='utf-8') as f:
+              data = json.load(f)
+          print(data['flash_settings']['flash_mode'])
+          PY
+                    )"
+                    flash_freq="$(python - <<'PY'
+          import json
+          with open('build/flasher_args.json', 'r', encoding='utf-8') as f:
+              data = json.load(f)
+          print(data['flash_settings']['flash_freq'])
+          PY
+                    )"
+                    flash_size="$(python - <<'PY'
+          import json
+          with open('build/flasher_args.json', 'r', encoding='utf-8') as f:
+              data = json.load(f)
+          print(data['flash_settings']['flash_size'])
+          PY
+                    )"
 
           artifact_dir="release-artifacts"
           app_firmware="focustimer_${version}.bin"
