@@ -266,6 +266,10 @@ static void init_minimal_display_stack(void)
     _lock_acquire(&lvgl_api_lock);
     create_screens();
     lv_scr_load(objects.main);
+    if (lvgl_display != NULL)
+    {
+        lv_refr_now(lvgl_display);
+    }
     _lock_release(&lvgl_api_lock);
 
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
