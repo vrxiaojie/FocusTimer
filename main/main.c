@@ -71,8 +71,7 @@ void app_main(void)
     _lock_release(&lvgl_api_lock);
     sleep_register_ble_datetime_cb();
     sleep_register_ble_power_settings_cb();
-    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
-
+    
     /* 如果是触摸唤醒，通常意味着用户要操作。
        由于 ext1 是电平唤醒，触摸那一下不一定会再产生一次下降沿中断，
        因此这里主动恢复屏幕到 HPM，避免"已唤醒但界面不刷新/无法操作"的假死观感。 */
@@ -88,12 +87,13 @@ void app_main(void)
         _lock_acquire(&lvgl_api_lock);
         lv_scr_load_anim(objects.start, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);
         _lock_release(&lvgl_api_lock);
+        ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
         vTaskDelay(pdTICKS_TO_MS(1000));
         _lock_acquire(&lvgl_api_lock);
         lv_scr_load_anim(objects.main, LV_SCR_LOAD_ANIM_OVER_BOTTOM, 300, 0, true);
         _lock_release(&lvgl_api_lock);
     }
-
+    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
     imu_start_flip_detection_task();
 
     // 注册shipping mode回调并启动电源按键检测

@@ -169,13 +169,16 @@ static void lvgl_port_task(void *arg)
 
 void lvgl_user_init(esp_lcd_panel_handle_t panel_handle, esp_lcd_panel_io_handle_t io_handle)
 {
+    // 初始化 panel_buffer 为白色，避免启动时显示黑屏
+    memset(panel_buffer, 0xFF, sizeof(panel_buffer));
+
     // 屏幕分辨率为 168x384。
     // 按前面的换算规则: 宽度168需要 (168/12)*3 = 42 Byte ；高度 384/2 = 192 个双行。
     size_t full_sz = 42 * 192;                                      // 8064 Bytes
     uint8_t *clear_buf = heap_caps_malloc(full_sz, MALLOC_CAP_DMA); // 最好放置在DMA可用内存中避免SPI报错
     if (clear_buf)
     {
-        memset(clear_buf, 0x00, full_sz); // 0x00(黑) 或 0xFF(白)，根据底反色决定
+        memset(clear_buf, 0xFF, full_sz); // 0xFF(白色)，避免黑屏闪烁
         esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, 168, 384, clear_buf);
         free(clear_buf);
     }
