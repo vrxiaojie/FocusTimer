@@ -436,7 +436,18 @@ static esp_err_t nvs_storage_export_json_internal(char *buffer,
     char *json = NULL;
     char *rendered_json = NULL;
     cJSON *root = NULL;
-    esp_err_t err = nvs_storage_load_records_json_alloc(&json);
+    esp_err_t err;
+
+    if (include_in_memory_totals)
+    {
+        err = nvs_storage_save_daily_record();
+        if (err != ESP_OK)
+        {
+            return err;
+        }
+    }
+
+    err = nvs_storage_load_records_json_alloc(&json);
     if (err != ESP_OK)
     {
         return err;
