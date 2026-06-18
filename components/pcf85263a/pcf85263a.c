@@ -131,7 +131,11 @@ esp_err_t pcf85263a_init(i2c_port_num_t port_num)
     if (ret != ESP_OK) {
         return ret;
     }
-    return ret;
+
+    return reg_update_bits((pcf85263a_handle_t)pcf85263a_i2c_dev_handle,
+                           PCF85263A_REG_CTRL_PIN_IO,
+                           PCF85263A_PIN_IO_INTAPM_MASK,
+                           PCF85263A_INTA_MODE_INTERRUPT);
 }
 
 esp_err_t pcf85263a_deinit()
