@@ -24,6 +24,7 @@
 #include "imu.h"
 #include "aw32001.h"
 #include "battery.h"
+#include "max98357.h"
 #include "message_screen_calls.h"
 #include "main_screen_calls.h"
 #include "power_setting_screen_calls.h"
@@ -31,6 +32,7 @@
 #include "power_management.h"
 #include "st7305_2p9.h"
 #include "ble.h"
+#include "driver/gpio.h"
 
 #define TAG "sleep"
 
@@ -157,7 +159,6 @@ static bool maybe_enter_configured_sleep_period(void)
     power_sleep_period_t period = {0};
     pcf85263a_datetime_t datetime = {0};
     pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
-    uint32_t sleep_ms = 0;
 
     if (rtc_handle == NULL)
     {
@@ -174,6 +175,7 @@ static bool maybe_enter_configured_sleep_period(void)
         return false;
     }
 
+    uint32_t sleep_ms = 0;
     if (!get_sleep_period_remaining_ms(&period, &datetime, &sleep_ms))
     {
         return false;
@@ -187,11 +189,11 @@ static bool maybe_enter_configured_sleep_period(void)
     }
 
     ESP_LOGI(TAG,
-             "in configured sleep period %02u:%02u-%02u:%02u, now=%02u:%02u:%02u, deep sleep %lu ms",
+             "in configured sleep period %02u:%02u-%02u:%02u, now=%02u:%02u:%02u, RTC alarm at %02u:%02u",
              period.start_hour, period.start_minute,
              period.end_hour, period.end_minute,
              datetime.hour, datetime.minute, datetime.second,
-             (unsigned long)sleep_ms);
+             period.end_hour, period.end_minute);
 
     /* 关屏幕：最小初始化 SPI + LCD */
     spi_shared_lock_init();
@@ -202,7 +204,7 @@ static bool maybe_enter_configured_sleep_period(void)
     /* 因为进入休眠时段后不会过0点，这里需要做午夜同步 */
     sleep_sync_daily_record_on_midnight_wakeup();
 
-    power_management_enter_deepsleep(sleep_ms);
+    power_management_enter_deepsleep_until_rtc_time(period.end_hour, period.end_minute);
     return true;
 }
 
@@ -240,9 +242,29 @@ static void pre_deepsleep_cb(void *user_data)
     {
         ESP_LOGW(TAG, "set aw96103 doze mode before deep sleep failed: %s", esp_err_to_name(err));
     }
-    esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
+
+    err = stcc4_prepare_for_deepsleep();
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "set stcc4 sleep mode before deep sleep failed: %s", esp_err_to_name(err));
+    }
+
+    err = max98357_prepare_for_deepsleep();
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "set audio amplifier shutdown before deep sleep failed: %s", esp_err_to_name(err));
+    }
+
+    if (panel_handle != NULL)
+    {
+        esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
+    }
 
     (void)imu_prepare_for_deepsleep();
+
+#if !SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
+    gpio_deep_sleep_hold_en();
+#endif
 }
 
 static void ble_datetime_updated_cb(void *user_data)
@@ -319,15 +341,21 @@ void sleep_sync_daily_record_on_midnight_wakeup(void)
     ESP_LOGI(TAG, "midnight wakeup detected, synced previous day record");
 }
 
-void sleep_handle_timer_wakeup(void)
+void sleep_handle_rtc_wakeup(void)
 {
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
+    pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
+    if (rtc_handle != NULL)
+    {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_clear_flags(rtc_handle, PCF85263A_FLAG_PIF | PCF85263A_FLAG_A1F));
+    }
     ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_refresh_once());
+    sleep_register_pre_deepsleep_cb();
 
     /* 如果当前处于配置的休眠时段，关屏并继续 deep sleep 到时段结束 */
     if (maybe_enter_configured_sleep_period())
@@ -349,7 +377,7 @@ void sleep_handle_timer_wakeup(void)
     vTaskDelay(pdMS_TO_TICKS(120));
 
     esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
-    power_management_enter_deepsleep(58000);
+    power_management_enter_deepsleep(60 * 1000);
 }
 
 void sleep_register_pre_deepsleep_cb(void)

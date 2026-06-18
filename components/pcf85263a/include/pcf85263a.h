@@ -43,6 +43,13 @@ typedef enum {
     PCF85263A_INTA_MODE_HIGH_IMPEDANCE = 3,
 } pcf85263a_inta_mode_t;
 
+typedef enum {
+    PCF85263A_PERIODIC_DISABLED = 0,
+    PCF85263A_PERIODIC_EVERY_SECOND = 1,
+    PCF85263A_PERIODIC_EVERY_MINUTE = 2,
+    PCF85263A_PERIODIC_EVERY_HOUR = 3,
+} pcf85263a_periodic_interrupt_t;
+
 typedef struct pcf85263a_dev_t *pcf85263a_handle_t;
 
 typedef enum {
@@ -77,6 +84,8 @@ esp_err_t pcf85263a_get_datetime(pcf85263a_handle_t handle, pcf85263a_datetime_t
 
 esp_err_t pcf85263a_set_alarm1(pcf85263a_handle_t handle, const pcf85263a_alarm1_t *alarm);
 esp_err_t pcf85263a_enable_alarm1_interrupt(pcf85263a_handle_t handle, bool enable);
+esp_err_t pcf85263a_set_periodic_interrupt(pcf85263a_handle_t handle, pcf85263a_periodic_interrupt_t period);
+esp_err_t pcf85263a_enable_periodic_interrupt(pcf85263a_handle_t handle, bool enable);
 esp_err_t pcf85263a_set_inta_mask(pcf85263a_handle_t handle, uint8_t mask, bool enable);
 esp_err_t pcf85263a_get_inta_mask(pcf85263a_handle_t handle, uint8_t *mask);
 

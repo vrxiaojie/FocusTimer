@@ -21,6 +21,7 @@
 #define PCF85263A_REG_DT_MONTH_ALM1   (0x0C)
 #define PCF85263A_REG_DT_ALARM_EN     (0x10)
 
+#define PCF85263A_REG_CTRL_FUNCTION   (0x28)
 #define PCF85263A_REG_CTRL_PIN_IO     (0x27)
 #define PCF85263A_REG_CTRL_INTA_EN    (0x29)
 #define PCF85263A_REG_CTRL_FLAGS      (0x2B)
@@ -32,7 +33,10 @@
 #define PCF85263A_ALRM_MON_A1E        (1U << 4)
 
 #define PCF85263A_INT_A1IE            (1U << 4)
+#define PCF85263A_INT_PIE             (1U << 6)
 #define PCF85263A_PIN_IO_INTAPM_MASK  (0x03)
+#define PCF85263A_FUNCTION_PI_MASK    (0x60)
+#define PCF85263A_FUNCTION_PI_SHIFT   (5U)
 
 #define PCF85263A_SEC_MASK            (0x7F)
 #define PCF85263A_MIN_MASK            (0x7F)
@@ -131,7 +135,11 @@ esp_err_t pcf85263a_init(i2c_port_num_t port_num)
     if (ret != ESP_OK) {
         return ret;
     }
-    return ret;
+
+    return reg_update_bits((pcf85263a_handle_t)pcf85263a_i2c_dev_handle,
+                           PCF85263A_REG_CTRL_PIN_IO,
+                           PCF85263A_PIN_IO_INTAPM_MASK,
+                           PCF85263A_INTA_MODE_INTERRUPT);
 }
 
 esp_err_t pcf85263a_deinit()
@@ -242,6 +250,32 @@ esp_err_t pcf85263a_enable_alarm1_interrupt(pcf85263a_handle_t handle, bool enab
                            PCF85263A_REG_CTRL_INTA_EN,
                            PCF85263A_INT_A1IE,
                            enable ? PCF85263A_INT_A1IE : 0);
+}
+
+esp_err_t pcf85263a_set_periodic_interrupt(pcf85263a_handle_t handle, pcf85263a_periodic_interrupt_t period)
+{
+    ESP_RETURN_ON_FALSE(handle != NULL, ESP_ERR_INVALID_ARG, "pcf85263a", "null handle");
+    ESP_RETURN_ON_FALSE(period <= PCF85263A_PERIODIC_EVERY_HOUR, ESP_ERR_INVALID_ARG, "pcf85263a", "invalid period");
+
+    esp_err_t ret = reg_update_bits(handle,
+                                    PCF85263A_REG_CTRL_FUNCTION,
+                                    PCF85263A_FUNCTION_PI_MASK,
+                                    (uint8_t)((uint8_t)period << PCF85263A_FUNCTION_PI_SHIFT));
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    return pcf85263a_enable_periodic_interrupt(handle, period != PCF85263A_PERIODIC_DISABLED);
+}
+
+esp_err_t pcf85263a_enable_periodic_interrupt(pcf85263a_handle_t handle, bool enable)
+{
+    ESP_RETURN_ON_FALSE(handle != NULL, ESP_ERR_INVALID_ARG, "pcf85263a", "null handle");
+
+    return reg_update_bits(handle,
+                           PCF85263A_REG_CTRL_INTA_EN,
+                           PCF85263A_INT_PIE,
+                           enable ? PCF85263A_INT_PIE : 0);
 }
 
 esp_err_t pcf85263a_set_inta_mask(pcf85263a_handle_t handle, uint8_t mask, bool enable)

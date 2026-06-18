@@ -247,6 +247,16 @@ esp_err_t max98357_set_enabled(max98357_handle_t *handle, bool enable)
     return s_set_power_pin_level(enable);
 }
 
+esp_err_t max98357_prepare_for_deepsleep(void)
+{
+    esp_err_t ret = s_config_power_pin();
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    return s_set_power_pin_level(false);
+}
+
 esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)
 {
     if (handle == NULL || path == NULL || !handle->initialized) {

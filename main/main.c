@@ -2,8 +2,12 @@
 #include <sys/lock.h>
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 
+#include "driver/gpio.h"
+
+#include "esp_check.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
 
@@ -37,15 +41,23 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(sleep_init_nvs_flash());
     bool wakeup_from_timer = power_management_is_wakeup_from_timer();
     bool wakeup_by_touch = power_management_is_wakeup_by_touch();
+    bool wakeup_by_rtc = power_management_is_wakeup_by_rtc();
 
     if (wakeup_from_timer)
     {
-        sleep_handle_timer_wakeup();
+        sleep_handle_rtc_wakeup();
+        return;
+    }
+
+    if (wakeup_by_rtc && !wakeup_by_touch)
+    {
+        sleep_handle_rtc_wakeup();
         return;
     }
 
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(rtc_interrupt_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
     sleep_sync_daily_record_on_midnight_wakeup();
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw96103_init());

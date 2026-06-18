@@ -97,12 +97,18 @@ bool power_management_is_wakeup_from_sleep(void);
  * @brief 是否因触摸操作从 deep sleep 唤醒
  */
 bool power_management_is_wakeup_by_touch(void);
+bool power_management_is_wakeup_by_rtc(void);
 bool power_management_is_wakeup_from_timer(void);
 
 /**
- * @brief 主动进入 deep sleep（指定毫秒后定时唤醒 + 触摸中断唤醒）
+ * @brief 主动进入 deep sleep（RTC 每分钟中断唤醒 + 触摸中断唤醒）
  */
 void power_management_enter_deepsleep(uint32_t wakeup_time_ms);
+
+/**
+ * @brief 主动进入 deep sleep（RTC Alarm1 在指定时间唤醒 + 触摸中断唤醒）
+ */
+void power_management_enter_deepsleep_until_rtc_time(uint8_t hour, uint8_t minute);
 
 #ifdef __cplusplus
 }
