@@ -49,6 +49,7 @@ esp_err_t stcc4_set_rht_compensation(uint16_t rawTemperature, uint16_t rawHumidi
 esp_err_t stcc4_measure_single_shot();
 esp_err_t stcc4_enter_sleep_mode();
 esp_err_t stcc4_exit_sleep_mode();
+esp_err_t stcc4_prepare_for_deepsleep(void);
 esp_err_t stcc4_perform_conditioning();
 esp_err_t stcc4_perform_factory_reset(uint16_t *factoryResetResult);
 esp_err_t stcc4_perform_self_test(uint16_t *testResult);

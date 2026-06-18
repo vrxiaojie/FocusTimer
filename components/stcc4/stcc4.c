@@ -206,6 +206,24 @@ esp_err_t stcc4_enter_sleep_mode()
     return ESP_OK;
 }
 
+esp_err_t stcc4_prepare_for_deepsleep(void)
+{
+    if (stcc4_i2c_dev_handle == NULL)
+    {
+        return ESP_OK;
+    }
+
+    uint8_t buf[2] = {0x36, 0x50};
+    esp_err_t err = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(2));
+    return ESP_OK;
+}
+
 esp_err_t stcc4_exit_sleep_mode()
 {
     uint8_t buf[2] = {0x00, 0x00};

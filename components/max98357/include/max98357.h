@@ -37,6 +37,8 @@ esp_err_t max98357_deinit(max98357_handle_t *handle);
 
 esp_err_t max98357_set_enabled(max98357_handle_t *handle, bool enable);
 
+esp_err_t max98357_prepare_for_deepsleep(void);
+
 esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path);
 
 esp_err_t max98357_play_wav_from_partition(max98357_handle_t *handle, const char *partition_label, uint32_t max_play_ms);

@@ -24,6 +24,7 @@
 #include "imu.h"
 #include "aw32001.h"
 #include "battery.h"
+#include "max98357.h"
 #include "message_screen_calls.h"
 #include "main_screen_calls.h"
 #include "power_setting_screen_calls.h"
@@ -31,6 +32,7 @@
 #include "power_management.h"
 #include "st7305_2p9.h"
 #include "ble.h"
+#include "driver/gpio.h"
 
 #define TAG "sleep"
 
@@ -240,9 +242,29 @@ static void pre_deepsleep_cb(void *user_data)
     {
         ESP_LOGW(TAG, "set aw96103 doze mode before deep sleep failed: %s", esp_err_to_name(err));
     }
-    esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
+
+    err = stcc4_prepare_for_deepsleep();
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "set stcc4 sleep mode before deep sleep failed: %s", esp_err_to_name(err));
+    }
+
+    err = max98357_prepare_for_deepsleep();
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "set audio amplifier shutdown before deep sleep failed: %s", esp_err_to_name(err));
+    }
+
+    if (panel_handle != NULL)
+    {
+        esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
+    }
 
     (void)imu_prepare_for_deepsleep();
+
+#if !SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
+    gpio_deep_sleep_hold_en();
+#endif
 }
 
 static void ble_datetime_updated_cb(void *user_data)
@@ -328,6 +350,7 @@ void sleep_handle_timer_wakeup(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_refresh_once());
+    sleep_register_pre_deepsleep_cb();
 
     /* 如果当前处于配置的休眠时段，关屏并继续 deep sleep 到时段结束 */
     if (maybe_enter_configured_sleep_period())
