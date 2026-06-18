@@ -125,9 +125,15 @@ static esp_err_t rtc_interrupt_init(void)
     ESP_RETURN_ON_ERROR(pcf85263a_set_inta_mode(rtc_handle, PCF85263A_INTA_MODE_INTERRUPT),
                         TAG,
                         "set RTC INTA interrupt mode failed");
-    ESP_RETURN_ON_ERROR(pcf85263a_clear_flags(rtc_handle, PCF85263A_FLAG_PIF),
+    ESP_RETURN_ON_ERROR(pcf85263a_set_inta_mask(rtc_handle, PCF85263A_INTA_ILP, true),
                         TAG,
-                        "clear RTC periodic flag failed");
+                        "set RTC INTA level interrupt mode failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_enable_alarm1_interrupt(rtc_handle, false),
+                        TAG,
+                        "disable RTC alarm1 interrupt failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_clear_flags(rtc_handle, PCF85263A_FLAG_PIF | PCF85263A_FLAG_A1F),
+                        TAG,
+                        "clear RTC interrupt flags failed");
     ESP_RETURN_ON_ERROR(pcf85263a_set_periodic_interrupt(rtc_handle, RTC_PERIODIC_INTERRUPT_MODE),
                         TAG,
                         "set RTC periodic interrupt failed");
@@ -192,10 +198,17 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(sleep_init_nvs_flash());
     bool wakeup_from_timer = power_management_is_wakeup_from_timer();
     bool wakeup_by_touch = power_management_is_wakeup_by_touch();
+    bool wakeup_by_rtc = power_management_is_wakeup_by_rtc();
 
     if (wakeup_from_timer)
     {
-        sleep_handle_timer_wakeup();
+        sleep_handle_rtc_wakeup();
+        return;
+    }
+
+    if (wakeup_by_rtc && !wakeup_by_touch)
+    {
+        sleep_handle_rtc_wakeup();
         return;
     }
 

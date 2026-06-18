@@ -21,9 +21,9 @@ esp_err_t sleep_init_nvs_flash(void);
 void sleep_sync_daily_record_on_midnight_wakeup(void);
 
 /**
- * @brief 处理定时器唤醒路径（简短亮屏后继续 deep sleep）
+ * @brief 处理 RTC 定时中断唤醒路径（简短亮屏后继续 deep sleep）
  */
-void sleep_handle_timer_wakeup(void);
+void sleep_handle_rtc_wakeup(void);
 
 /**
  * @brief 注册 deep sleep 前回调（关 BLE、IMU、屏幕降功耗等）

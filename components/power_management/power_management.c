@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "esp_log.h"
+#include "esp_check.h"
 #include "esp_pm.h"
 #include "esp_sleep.h"
 #include "nvs_flash.h"
@@ -14,6 +15,7 @@
 #include "freertos/task.h"
 #include "st7305_2p9.h"
 #include "pinmap.h"
+#include "pcf85263a.h"
 
 #define TAG "power_mgmt"
 
@@ -31,6 +33,7 @@
 /* ---- 空闲超时 ---- */
 #define SCREEN_LPM_TIMEOUT_SEC (2)
 #define DEEPSLEEP_IDLE_TIMEOUT_SEC (5 * 60)
+#define DEFAULT_RTC_WAKEUP_MS (60 * 1000U)
 
 /* ---- 频率配置 ---- */
 #define PM_MAX_FREQ_MHZ 96
@@ -326,7 +329,22 @@ bool power_management_is_wakeup_from_timer(void)
 
 bool power_management_is_wakeup_by_touch(void)
 {
-    return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
+    if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_EXT1)
+    {
+        return false;
+    }
+
+    return (esp_sleep_get_ext1_wakeup_status() & BIT(TOUCH_INT_PIN)) != 0;
+}
+
+bool power_management_is_wakeup_by_rtc(void)
+{
+    if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_EXT1)
+    {
+        return false;
+    }
+
+    return (esp_sleep_get_ext1_wakeup_status() & BIT(RTC_INT_PIN)) != 0;
 }
 
 esp_err_t power_management_register_pre_deepsleep_cb(power_management_hook_cb_t cb, void *user_data)
@@ -336,8 +354,114 @@ esp_err_t power_management_register_pre_deepsleep_cb(power_management_hook_cb_t 
     return ESP_OK;
 }
 
+static esp_err_t configure_rtc_periodic_wakeup(void)
+{
+    pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
+    if (rtc_handle == NULL)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_RETURN_ON_ERROR(pcf85263a_set_inta_mode(rtc_handle, PCF85263A_INTA_MODE_INTERRUPT),
+                        TAG,
+                        "set RTC INTA interrupt mode failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_set_inta_mask(rtc_handle, PCF85263A_INTA_ILP, true),
+                        TAG,
+                        "set RTC INTA level interrupt mode failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_enable_alarm1_interrupt(rtc_handle, false),
+                        TAG,
+                        "disable RTC alarm1 interrupt failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_clear_flags(rtc_handle, PCF85263A_FLAG_PIF | PCF85263A_FLAG_A1F),
+                        TAG,
+                        "clear RTC flags failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_set_periodic_interrupt(rtc_handle, PCF85263A_PERIODIC_EVERY_MINUTE),
+                        TAG,
+                        "set RTC periodic wakeup failed");
+
+    return ESP_OK;
+}
+
+static esp_err_t configure_rtc_alarm_wakeup(uint8_t hour, uint8_t minute)
+{
+    pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
+    if (rtc_handle == NULL)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    pcf85263a_datetime_t now = {0};
+    esp_err_t err = pcf85263a_get_datetime(rtc_handle, &now);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+
+    pcf85263a_alarm1_t alarm = {
+        .second = 0,
+        .minute = minute,
+        .hour = hour,
+        .day = now.day,
+        .month = now.month,
+        .match_second = true,
+        .match_minute = true,
+        .match_hour = true,
+        .match_day = false,
+        .match_month = false,
+    };
+
+    ESP_RETURN_ON_ERROR(pcf85263a_set_inta_mode(rtc_handle, PCF85263A_INTA_MODE_INTERRUPT),
+                        TAG,
+                        "set RTC INTA interrupt mode failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_set_inta_mask(rtc_handle, PCF85263A_INTA_ILP, true),
+                        TAG,
+                        "set RTC INTA level interrupt mode failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_set_periodic_interrupt(rtc_handle, PCF85263A_PERIODIC_DISABLED),
+                        TAG,
+                        "disable RTC periodic wakeup failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_set_alarm1(rtc_handle, &alarm),
+                        TAG,
+                        "set RTC alarm1 wakeup failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_clear_flags(rtc_handle, PCF85263A_FLAG_PIF | PCF85263A_FLAG_A1F),
+                        TAG,
+                        "clear RTC flags failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_enable_alarm1_interrupt(rtc_handle, true),
+                        TAG,
+                        "enable RTC alarm1 interrupt failed");
+
+    ESP_LOGI(TAG, "RTC alarm wakeup configured at %02u:%02u:00", hour, minute);
+    return ESP_OK;
+}
+
+static void enter_deepsleep_with_ext1_wakeup(const char *rtc_mode_desc)
+{
+    /* 清掉上一轮 deep sleep 遗留的唤醒源配置/状态，避免下一次入睡时误复用旧 timer。 */
+    esp_err_t err = esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "disable previous wakeup sources failed: %s", esp_err_to_name(err));
+    }
+
+    uint64_t wakeup_mask = BIT(TOUCH_INT_PIN) | BIT(RTC_INT_PIN);
+    err = esp_sleep_enable_ext1_wakeup(wakeup_mask, ESP_EXT1_WAKEUP_ANY_LOW);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "enable ext1 wakeup failed (GPIO%d/GPIO%d): %s",
+                 TOUCH_INT_PIN, RTC_INT_PIN, esp_err_to_name(err));
+    }
+
+    ESP_LOGI(TAG, "entering deep sleep, wakeup: RTC %s on GPIO%d low + touch GPIO%d low",
+             rtc_mode_desc, RTC_INT_PIN, TOUCH_INT_PIN);
+    esp_deep_sleep_start();
+}
+
 void power_management_enter_deepsleep(uint32_t wakeup_time_ms)
 {
+    if (wakeup_time_ms != DEFAULT_RTC_WAKEUP_MS)
+    {
+        ESP_LOGD(TAG, "timer wakeup request %lu ms is mapped to RTC every-minute wakeup",
+                 (unsigned long)wakeup_time_ms);
+    }
+
     /* 停止空闲计时器，避免 deep sleep 期间触发 */
     power_management_stop_idle_timer();
     s_deepsleep_idle_detect_enabled = false;
@@ -348,31 +472,42 @@ void power_management_enter_deepsleep(uint32_t wakeup_time_ms)
         s_pre_deepsleep_cb(s_pre_deepsleep_user_data);
     }
 
-    /* 清掉上一轮 deep sleep 遗留的唤醒源配置/状态，避免下一次入睡时误复用旧 timer。 */
-    esp_err_t err = esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+    esp_err_t err = configure_rtc_periodic_wakeup();
     if (err != ESP_OK)
     {
-        ESP_LOGW(TAG, "disable previous wakeup sources failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "configure RTC periodic wakeup failed: %s", esp_err_to_name(err));
     }
 
-    /* 定时唤醒：定期更新时间显示 */
-    err = esp_sleep_enable_timer_wakeup(wakeup_time_ms * 1000ULL);
+    enter_deepsleep_with_ext1_wakeup("every minute");
+    /* 不会执行到这里 */
+}
+
+void power_management_enter_deepsleep_until_rtc_time(uint8_t hour, uint8_t minute)
+{
+    if (hour > 23)
+    {
+        hour = 0;
+    }
+    if (minute > 59)
+    {
+        minute = 0;
+    }
+
+    power_management_stop_idle_timer();
+    s_deepsleep_idle_detect_enabled = false;
+
+    if (s_pre_deepsleep_cb != NULL)
+    {
+        s_pre_deepsleep_cb(s_pre_deepsleep_user_data);
+    }
+
+    esp_err_t err = configure_rtc_alarm_wakeup(hour, minute);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "enable timer wakeup failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "configure RTC alarm wakeup failed: %s", esp_err_to_name(err));
     }
 
-    /* 触摸芯片低电平唤醒：用户触摸操作时唤醒（ext1 为电平唤醒） */
-    err = esp_sleep_enable_ext1_wakeup(BIT(TOUCH_INT_PIN), ESP_EXT1_WAKEUP_ANY_LOW);
-    if (err != ESP_OK)
-    {
-        /* 若该 GPIO 不是 RTC IO，ext1 可能会返回 ESP_ERR_INVALID_ARG，从而导致触摸无法唤醒 */
-        ESP_LOGE(TAG, "enable ext1 wakeup failed (GPIO%d): %s", TOUCH_INT_PIN, esp_err_to_name(err));
-    }
-
-    ESP_LOGI(TAG, "entering deep sleep, wakeup: timer %lu ms + ext1 GPIO%d low",
-             (unsigned long)wakeup_time_ms, TOUCH_INT_PIN);
-    esp_deep_sleep_start();
+    enter_deepsleep_with_ext1_wakeup("alarm");
     /* 不会执行到这里 */
 }
 
