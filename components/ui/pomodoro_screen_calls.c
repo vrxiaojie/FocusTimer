@@ -17,13 +17,13 @@
 #include "imu.h"
 
 #define POMODORO_SCREEN_UPDATE_MS 1000
-#define POMODORO_FLIP_CHECK_MS    1000
+#define POMODORO_FLIP_CHECK_MS 1000
 
 static const char *TAG = "pomodoro_screen";
 static TaskHandle_t s_pomodoro_screen_update_task_handle = NULL;
 static esp_timer_handle_t s_pomodoro_countdown_timer_handle = NULL;
 static esp_timer_handle_t s_pomodoro_flip_check_timer_handle = NULL;
-static bool s_update_task_exit_requested = false;
+static volatile bool s_pomodoro_screen_active = false;
 static bool s_countdown_timer_running = false;
 
 // 番茄钟状态
@@ -54,6 +54,7 @@ static portMUX_TYPE s_pomodoro_lock = portMUX_INITIALIZER_UNLOCKED;
 static bool s_audio_task_running = false;
 
 static void pomodoro_notify_ui_task(void);
+static void pomodoro_apply_countdown_timer_state(bool should_run);
 
 static uint16_t pomodoro_get_total_seconds_for_state(pomodoro_state_t state)
 {
@@ -165,18 +166,16 @@ static void pomodoro_sync_current_day_and_counts(void)
     }
 }
 
-static void pomodoro_record_stage_progress_locked(pomodoro_state_t completed_state,
-                                                  uint16_t remaining_seconds,
-                                                  bool increase_counter)
+static void pomodoro_persist_stage_progress(pomodoro_state_t completed_state,
+                                            uint16_t elapsed_minutes,
+                                            bool increase_counter)
 {
     esp_err_t err;
-    uint16_t elapsed_minutes = pomodoro_get_elapsed_minutes_for_state(completed_state, remaining_seconds);
 
     if (completed_state == POMODORO_STATE_FOCUS)
     {
         if (increase_counter)
         {
-            s_focus_count++;
             err = nvs_storage_increment_focus_count();
             if (err != ESP_OK)
             {
@@ -184,7 +183,6 @@ static void pomodoro_record_stage_progress_locked(pomodoro_state_t completed_sta
             }
         }
 
-        s_focus_minutes += elapsed_minutes;
         err = nvs_storage_accumulate_focus_minutes(elapsed_minutes);
         if (err != ESP_OK)
         {
@@ -195,7 +193,6 @@ static void pomodoro_record_stage_progress_locked(pomodoro_state_t completed_sta
     {
         if (increase_counter)
         {
-            s_nap_count++;
             err = nvs_storage_increment_nap_count();
             if (err != ESP_OK)
             {
@@ -203,7 +200,6 @@ static void pomodoro_record_stage_progress_locked(pomodoro_state_t completed_sta
             }
         }
 
-        s_rest_minutes += elapsed_minutes;
         err = nvs_storage_accumulate_rest_minutes(elapsed_minutes);
         if (err != ESP_OK)
         {
@@ -290,36 +286,61 @@ static void pomodoro_play_timeout_audio_todo(void)
     }
 }
 
-static void pomodoro_update_countdown_timer_locked(void)
+static bool pomodoro_should_countdown_run_locked(void)
 {
-    if (s_pomodoro_countdown_timer_handle == NULL)
+    return (s_pomodoro_countdown_timer_handle != NULL) && (!s_is_paused) && (!s_waiting_transition_confirm);
+}
+
+static bool pomodoro_should_countdown_run(void)
+{
+    bool should_run;
+
+    portENTER_CRITICAL(&s_pomodoro_lock);
+    should_run = pomodoro_should_countdown_run_locked();
+    portEXIT_CRITICAL(&s_pomodoro_lock);
+
+    return should_run;
+}
+
+static void pomodoro_apply_countdown_timer_state(bool should_run)
+{
+    esp_timer_handle_t timer_handle = s_pomodoro_countdown_timer_handle;
+    bool start_timer = false;
+    bool stop_timer = false;
+
+    if (timer_handle == NULL)
     {
         return;
     }
 
-    bool should_run = (!s_is_paused) && (!s_waiting_transition_confirm);
-
+    portENTER_CRITICAL(&s_pomodoro_lock);
     if (should_run && !s_countdown_timer_running)
     {
-        esp_err_t err = esp_timer_start_periodic(s_pomodoro_countdown_timer_handle,
-                                                 (uint64_t)POMODORO_SCREEN_UPDATE_MS * 1000ULL);
-        if (err == ESP_OK)
-        {
-            s_countdown_timer_running = true;
-        }
-        else if (err != ESP_ERR_INVALID_STATE)
-        {
-            ESP_LOGE(TAG, "Failed to start countdown timer: %s", esp_err_to_name(err));
-        }
+        s_countdown_timer_running = true;
+        start_timer = true;
     }
     else if (!should_run && s_countdown_timer_running)
     {
-        esp_err_t err = esp_timer_stop(s_pomodoro_countdown_timer_handle);
-        if (err == ESP_OK)
+        s_countdown_timer_running = false;
+        stop_timer = true;
+    }
+    portEXIT_CRITICAL(&s_pomodoro_lock);
+
+    if (start_timer)
+    {
+        esp_err_t err = esp_timer_start_periodic(timer_handle, (uint64_t)POMODORO_SCREEN_UPDATE_MS * 1000ULL);
+        if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
         {
+            portENTER_CRITICAL(&s_pomodoro_lock);
             s_countdown_timer_running = false;
+            portEXIT_CRITICAL(&s_pomodoro_lock);
+            ESP_LOGE(TAG, "Failed to start countdown timer: %s", esp_err_to_name(err));
         }
-        else if (err != ESP_ERR_INVALID_STATE)
+    }
+    else if (stop_timer)
+    {
+        esp_err_t err = esp_timer_stop(timer_handle);
+        if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
         {
             ESP_LOGE(TAG, "Failed to stop countdown timer: %s", esp_err_to_name(err));
         }
@@ -334,20 +355,40 @@ static void pomodoro_notify_ui_task(void)
     }
 }
 
-static void pomodoro_go_to_next_stage(bool increase_counter)
+static void pomodoro_go_to_next_stage_locked(pomodoro_state_t *completed_state,
+                                             uint16_t *elapsed_minutes,
+                                             bool increase_counter)
 {
-    pomodoro_state_t completed_state = s_pomodoro_state;
+    pomodoro_state_t previous_state = s_pomodoro_state;
     uint16_t remaining_seconds = s_remaining_seconds;
+    uint16_t elapsed = pomodoro_get_elapsed_minutes_for_state(previous_state, remaining_seconds);
+
+    if (completed_state != NULL)
+    {
+        *completed_state = previous_state;
+    }
+    if (elapsed_minutes != NULL)
+    {
+        *elapsed_minutes = elapsed;
+    }
 
     if (s_pomodoro_state == POMODORO_STATE_FOCUS)
     {
-        pomodoro_record_stage_progress_locked(completed_state, remaining_seconds, increase_counter);
+        if (increase_counter)
+        {
+            s_focus_count++;
+        }
+        s_focus_minutes += elapsed;
         s_pomodoro_state = POMODORO_STATE_REST;
         s_remaining_seconds = REST_TIME_MINUTES * 60;
     }
     else
     {
-        pomodoro_record_stage_progress_locked(completed_state, remaining_seconds, increase_counter);
+        if (increase_counter)
+        {
+            s_nap_count++;
+        }
+        s_rest_minutes += elapsed;
         s_pomodoro_state = POMODORO_STATE_FOCUS;
         s_remaining_seconds = FOCUS_TIME_MINUTES * 60;
     }
@@ -356,15 +397,18 @@ static void pomodoro_go_to_next_stage(bool increase_counter)
 static void pomodoro_timeout_message_confirm_cb(void *user_data)
 {
     (void)user_data;
+    pomodoro_state_t completed_state = POMODORO_STATE_FOCUS;
+    uint16_t elapsed_minutes = 0;
 
     portENTER_CRITICAL(&s_pomodoro_lock);
-    pomodoro_go_to_next_stage(true);
+    pomodoro_go_to_next_stage_locked(&completed_state, &elapsed_minutes, true);
     s_waiting_transition_confirm = false;
     s_timeout_message_pending = false;
     s_is_paused = true;
-    pomodoro_update_countdown_timer_locked();
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
+    pomodoro_apply_countdown_timer_state(false);
+    pomodoro_persist_stage_progress(completed_state, elapsed_minutes, true);
     pomodoro_notify_ui_task();
 }
 
@@ -442,6 +486,8 @@ static void update_pomodoro_labels_locked(void)
 static void pomodoro_countdown_timer_cb(void *arg)
 {
     (void)arg;
+    bool play_timeout_audio = false;
+    bool stop_countdown_timer = false;
 
     portENTER_CRITICAL(&s_pomodoro_lock);
     if (!s_is_paused && !s_waiting_transition_confirm)
@@ -453,14 +499,24 @@ static void pomodoro_countdown_timer_cb(void *arg)
 
         if (s_remaining_seconds == 0)
         {
-            pomodoro_play_timeout_audio_todo();
             s_waiting_transition_confirm = true;
             s_is_paused = true;
             s_timeout_message_pending = true;
             s_countdown_timer_running = false;
+            play_timeout_audio = true;
+            stop_countdown_timer = true;
         }
     }
     portEXIT_CRITICAL(&s_pomodoro_lock);
+
+    if (stop_countdown_timer && s_pomodoro_countdown_timer_handle != NULL)
+    {
+        (void)esp_timer_stop(s_pomodoro_countdown_timer_handle);
+    }
+    if (play_timeout_audio)
+    {
+        pomodoro_play_timeout_audio_todo();
+    }
     pomodoro_notify_ui_task();
 }
 
@@ -494,23 +550,14 @@ static void pomodoro_screen_update_task(void *arg)
 
     while (1)
     {
-        if (s_update_task_exit_requested)
-        {
-            break;
-        }
-
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        if (s_update_task_exit_requested)
-        {
-            break;
-        }
 
         bool show_timeout_message = false;
         pomodoro_state_t state_before_transition = POMODORO_STATE_FOCUS;
         char message_content[48];
 
         portENTER_CRITICAL(&s_pomodoro_lock);
-        if (s_timeout_message_pending)
+        if (s_pomodoro_screen_active && s_timeout_message_pending)
         {
             show_timeout_message = true;
             state_before_transition = s_pomodoro_state;
@@ -527,39 +574,39 @@ static void pomodoro_screen_update_task(void *arg)
         }
 
         _lock_acquire(&lvgl_api_lock);
-        update_pomodoro_labels_locked();
-        if (show_timeout_message)
+        if (s_pomodoro_screen_active)
         {
-            message_screen_set_confirm_callback(pomodoro_timeout_message_confirm_cb, NULL);
-            message_screen_show_with_text("时间到", message_content, "OK");
+            update_pomodoro_labels_locked();
+            if (show_timeout_message)
+            {
+                message_screen_set_confirm_callback(pomodoro_timeout_message_confirm_cb, NULL);
+                message_screen_show_with_text("时间到", message_content, "OK");
+            }
         }
         _lock_release(&lvgl_api_lock);
     }
-
-    vTaskDelete(NULL);
 }
 
 void pomodoro_screen_start_update_task(void)
 {
-    if (s_pomodoro_screen_update_task_handle != NULL)
-    {
-        return;
-    }
-
     pomodoro_sync_current_day_and_counts();
-    s_update_task_exit_requested = false;
+    s_pomodoro_screen_active = true;
 
-    BaseType_t task_created = xTaskCreate(pomodoro_screen_update_task,
-                                          "pomodoro_screen_update",
-                                          2048,
-                                          NULL,
-                                          5,
-                                          &s_pomodoro_screen_update_task_handle);
-    if (task_created != pdPASS)
+    if (s_pomodoro_screen_update_task_handle == NULL)
     {
-        ESP_LOGE(TAG, "Failed to create pomodoro update task");
-        s_pomodoro_screen_update_task_handle = NULL;
-        return;
+        BaseType_t task_created = xTaskCreate(pomodoro_screen_update_task,
+                                              "pomodoro_screen_update",
+                                              2048,
+                                              NULL,
+                                              5,
+                                              &s_pomodoro_screen_update_task_handle);
+        if (task_created != pdPASS)
+        {
+            ESP_LOGE(TAG, "Failed to create pomodoro update task");
+            s_pomodoro_screen_update_task_handle = NULL;
+            s_pomodoro_screen_active = false;
+            return;
+        }
     }
 
     if (s_pomodoro_countdown_timer_handle == NULL)
@@ -572,8 +619,7 @@ void pomodoro_screen_start_update_task(void)
         if (err != ESP_OK)
         {
             ESP_LOGE(TAG, "Failed to create countdown timer: %s", esp_err_to_name(err));
-            vTaskDelete(s_pomodoro_screen_update_task_handle);
-            s_pomodoro_screen_update_task_handle = NULL;
+            s_pomodoro_screen_active = false;
             return;
         }
     }
@@ -590,20 +636,15 @@ void pomodoro_screen_start_update_task(void)
             ESP_LOGE(TAG, "Failed to create flip timer: %s", esp_err_to_name(err));
             (void)esp_timer_delete(s_pomodoro_countdown_timer_handle);
             s_pomodoro_countdown_timer_handle = NULL;
-            vTaskDelete(s_pomodoro_screen_update_task_handle);
-            s_pomodoro_screen_update_task_handle = NULL;
+            s_pomodoro_screen_active = false;
             return;
         }
     }
 
-    portENTER_CRITICAL(&s_pomodoro_lock);
-    s_countdown_timer_running = false;
-    s_pomodoro_countdown_timer_handle = s_pomodoro_countdown_timer_handle;
-    pomodoro_update_countdown_timer_locked();
-    portEXIT_CRITICAL(&s_pomodoro_lock);
+    pomodoro_apply_countdown_timer_state(pomodoro_should_countdown_run());
 
     esp_err_t err = esp_timer_start_periodic(s_pomodoro_flip_check_timer_handle, (uint64_t)POMODORO_FLIP_CHECK_MS * 1000ULL);
-    if (err != ESP_OK)
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
     {
         ESP_LOGE(TAG, "Failed to start flip timer: %s", esp_err_to_name(err));
     }
@@ -614,28 +655,27 @@ void pomodoro_screen_start_update_task(void)
 
 void pomodoro_screen_stop_update_task(void)
 {
-    s_update_task_exit_requested = true;
-    s_countdown_timer_running = false;
+    s_pomodoro_screen_active = false;
 
-    if (s_pomodoro_countdown_timer_handle != NULL)
+    portENTER_CRITICAL(&s_pomodoro_lock);
+    s_countdown_timer_running = false;
+    portEXIT_CRITICAL(&s_pomodoro_lock);
+
+    esp_timer_handle_t countdown_timer = s_pomodoro_countdown_timer_handle;
+    if (countdown_timer != NULL)
     {
-        (void)esp_timer_stop(s_pomodoro_countdown_timer_handle);
-        (void)esp_timer_delete(s_pomodoro_countdown_timer_handle);
-        s_pomodoro_countdown_timer_handle = NULL;
+        (void)esp_timer_stop(countdown_timer);
     }
 
-    if (s_pomodoro_flip_check_timer_handle != NULL)
+    esp_timer_handle_t flip_timer = s_pomodoro_flip_check_timer_handle;
+    if (flip_timer != NULL)
     {
-        (void)esp_timer_stop(s_pomodoro_flip_check_timer_handle);
-        (void)esp_timer_delete(s_pomodoro_flip_check_timer_handle);
-        s_pomodoro_flip_check_timer_handle = NULL;
+        (void)esp_timer_stop(flip_timer);
     }
 
     if (s_pomodoro_screen_update_task_handle != NULL)
     {
-        TaskHandle_t task_handle = s_pomodoro_screen_update_task_handle;
-        s_pomodoro_screen_update_task_handle = NULL;
-        xTaskNotifyGive(task_handle);
+        pomodoro_notify_ui_task();
     }
 
     // ESP_LOGI(TAG, "Pomodoro screen update task stopped");
@@ -643,6 +683,8 @@ void pomodoro_screen_stop_update_task(void)
 
 void pomodoro_screen_toggle_pause(void)
 {
+    bool should_run;
+
     portENTER_CRITICAL(&s_pomodoro_lock);
     if (s_waiting_transition_confirm)
     {
@@ -651,15 +693,18 @@ void pomodoro_screen_toggle_pause(void)
         return;
     }
     s_is_paused = !s_is_paused;
-    pomodoro_update_countdown_timer_locked();
+    should_run = pomodoro_should_countdown_run_locked();
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
+    pomodoro_apply_countdown_timer_state(should_run);
     pomodoro_notify_ui_task();
     // ESP_LOGI(TAG, "Pomodoro %s", s_is_paused ? "paused" : "resumed");
 }
 
 void pomodoro_screen_reset(void)
 {
+    bool should_run;
+
     portENTER_CRITICAL(&s_pomodoro_lock);
     s_is_paused = true;
     s_waiting_transition_confirm = false;
@@ -672,23 +717,30 @@ void pomodoro_screen_reset(void)
     {
         s_remaining_seconds = REST_TIME_MINUTES * 60;
     }
-    pomodoro_update_countdown_timer_locked();
+    should_run = pomodoro_should_countdown_run_locked();
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
+    pomodoro_apply_countdown_timer_state(should_run);
     pomodoro_notify_ui_task();
     // ESP_LOGI(TAG, "Pomodoro reset");
 }
 
 void pomodoro_screen_skip(void)
 {
+    pomodoro_state_t completed_state = POMODORO_STATE_FOCUS;
+    uint16_t elapsed_minutes = 0;
+    bool should_run;
+
     portENTER_CRITICAL(&s_pomodoro_lock);
-    pomodoro_go_to_next_stage(true);
+    pomodoro_go_to_next_stage_locked(&completed_state, &elapsed_minutes, true);
     s_is_paused = true;
     s_waiting_transition_confirm = false;
     s_timeout_message_pending = false;
-    pomodoro_update_countdown_timer_locked();
+    should_run = pomodoro_should_countdown_run_locked();
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
+    pomodoro_apply_countdown_timer_state(should_run);
+    pomodoro_persist_stage_progress(completed_state, elapsed_minutes, true);
     pomodoro_notify_ui_task();
     // ESP_LOGI(TAG, "Pomodoro skipped to next state");
 }
