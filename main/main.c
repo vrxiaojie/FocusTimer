@@ -2,8 +2,12 @@
 #include <sys/lock.h>
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 
+#include "driver/gpio.h"
+
+#include "esp_check.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
 
@@ -28,6 +32,157 @@
 #include "pinmap.h"
 
 #define TAG "main"
+//test rtc interrupt -- start
+#define RTC_INT_TASK_STACK_SIZE 2048
+#define RTC_INT_TASK_PRIORITY 10
+#define RTC_PERIODIC_INTERRUPT_MODE PCF85263A_PERIODIC_EVERY_MINUTE
+
+static QueueHandle_t s_rtc_int_evt_queue = NULL;
+
+static void IRAM_ATTR rtc_int_isr_handler(void *arg)
+{
+    uint32_t gpio_num = (uint32_t)(uintptr_t)arg;
+    BaseType_t high_task_woken = pdFALSE;
+
+    if (s_rtc_int_evt_queue != NULL)
+    {
+        xQueueSendFromISR(s_rtc_int_evt_queue, &gpio_num, &high_task_woken);
+    }
+
+    if (high_task_woken == pdTRUE)
+    {
+        portYIELD_FROM_ISR();
+    }
+}
+
+static void rtc_int_task(void *arg)
+{
+    (void)arg;
+
+    uint32_t io_num = 0;
+
+    while (1)
+    {
+        if (xQueueReceive(s_rtc_int_evt_queue, &io_num, portMAX_DELAY) != pdTRUE)
+        {
+            continue;
+        }
+
+        pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
+        if (rtc_handle == NULL)
+        {
+            ESP_LOGW(TAG, "RTC INT GPIO%" PRIu32 ", but RTC handle is unavailable", io_num);
+            continue;
+        }
+
+        uint8_t flags = 0;
+        esp_err_t err = pcf85263a_get_flags(rtc_handle, &flags);
+        if (err != ESP_OK)
+        {
+            ESP_LOGW(TAG, "read RTC flags failed after GPIO%" PRIu32 " interrupt: %s", io_num, esp_err_to_name(err));
+            continue;
+        }
+
+        pcf85263a_datetime_t datetime = {0};
+        err = pcf85263a_get_datetime(rtc_handle, &datetime);
+        if (err == ESP_OK)
+        {
+            ESP_LOGI(TAG,
+                     "RTC INT GPIO%" PRIu32 " falling edge, flags=0x%02x, time=%04u-%02u-%02u %02u:%02u:%02u",
+                     io_num,
+                     flags,
+                     datetime.year,
+                     datetime.month,
+                     datetime.day,
+                     datetime.hour,
+                     datetime.minute,
+                     datetime.second);
+        }
+        else
+        {
+            ESP_LOGW(TAG, "read RTC datetime failed after GPIO%" PRIu32 " interrupt: %s", io_num, esp_err_to_name(err));
+        }
+
+        if ((flags & PCF85263A_FLAG_PIF) != 0)
+        {
+            err = pcf85263a_clear_flags(rtc_handle, PCF85263A_FLAG_PIF);
+            if (err != ESP_OK)
+            {
+                ESP_LOGW(TAG, "clear RTC periodic flag failed: %s", esp_err_to_name(err));
+            }
+        }
+    }
+}
+
+static esp_err_t rtc_interrupt_init(void)
+{
+    pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
+    if (rtc_handle == NULL)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_RETURN_ON_ERROR(pcf85263a_set_inta_mode(rtc_handle, PCF85263A_INTA_MODE_INTERRUPT),
+                        TAG,
+                        "set RTC INTA interrupt mode failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_clear_flags(rtc_handle, PCF85263A_FLAG_PIF),
+                        TAG,
+                        "clear RTC periodic flag failed");
+    ESP_RETURN_ON_ERROR(pcf85263a_set_periodic_interrupt(rtc_handle, RTC_PERIODIC_INTERRUPT_MODE),
+                        TAG,
+                        "set RTC periodic interrupt failed");
+
+    gpio_config_t io_conf = {
+        .pin_bit_mask = 1ULL << RTC_INT_PIN,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_NEGEDGE,
+    };
+    ESP_RETURN_ON_ERROR(gpio_config(&io_conf), TAG, "configure RTC INT GPIO failed");
+
+    if (s_rtc_int_evt_queue == NULL)
+    {
+        s_rtc_int_evt_queue = xQueueCreate(10, sizeof(uint32_t));
+        if (s_rtc_int_evt_queue == NULL)
+        {
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
+    esp_err_t err = gpio_install_isr_service(0);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
+    {
+        return err;
+    }
+
+    err = gpio_isr_handler_add(RTC_INT_PIN, rtc_int_isr_handler, (void *)(uintptr_t)RTC_INT_PIN);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
+    {
+        return err;
+    }
+
+    BaseType_t task_ok = xTaskCreate(rtc_int_task,
+                                     "rtc_int_task",
+                                     RTC_INT_TASK_STACK_SIZE,
+                                     NULL,
+                                     RTC_INT_TASK_PRIORITY,
+                                     NULL);
+    if (task_ok != pdPASS)
+    {
+        return ESP_ERR_NO_MEM;
+    }
+
+    if (gpio_get_level(RTC_INT_PIN) == 0)
+    {
+        uint32_t io_num = RTC_INT_PIN;
+        (void)xQueueSend(s_rtc_int_evt_queue, &io_num, 0);
+    }
+
+    ESP_LOGI(TAG, "RTC periodic interrupt initialized on GPIO%d", RTC_INT_PIN);
+    return ESP_OK;
+}
+//test rtc interrupt -- end
 
 void app_main(void)
 {
@@ -46,6 +201,7 @@ void app_main(void)
 
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(rtc_interrupt_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
     sleep_sync_daily_record_on_midnight_wakeup();
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw96103_init());
