@@ -229,7 +229,13 @@ static void pre_deepsleep_cb(void *user_data)
 
     (void)ble_set_advertising_enabled(false);
 
-    esp_err_t err = aw96103_enter_doze_mode();
+    esp_err_t err = nvs_storage_save_daily_record();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "save daily record before deep sleep failed: %s", esp_err_to_name(err));
+    }
+
+    err = aw96103_enter_doze_mode();
     if (err != ESP_OK)
     {
         ESP_LOGW(TAG, "set aw96103 doze mode before deep sleep failed: %s", esp_err_to_name(err));
