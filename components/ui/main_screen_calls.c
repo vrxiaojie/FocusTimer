@@ -22,6 +22,7 @@
 static const char *TAG = "main_screen_calls";
 static TaskHandle_t s_main_screen_update_task_handle = NULL;
 static esp_timer_handle_t s_main_screen_timer_handle = NULL;
+static bool s_auto_wakeup_refreshing = false;
 
 static const char *const s_weekday_text[] = {
     "星期日",
@@ -224,6 +225,13 @@ static void main_screen_update_task(void *arg)
 
 void main_screen_start_update_task(void)
 {
+    if (s_auto_wakeup_refreshing)
+    {
+        update_main_screen_date_labels(false);
+        ESP_LOGD(TAG, "Main screen update task skipped during auto wakeup refresh");
+        return;
+    }
+
     if (stcc4_task_handle == NULL)
     {
         stcc4_start_measurement_task();
@@ -276,6 +284,11 @@ void main_screen_start_update_task(void)
     ESP_LOGI(TAG, "Main screen update task started");
 }
 
+void main_screen_set_auto_wakeup_refreshing(bool refreshing)
+{
+    s_auto_wakeup_refreshing = refreshing;
+}
+
 void main_screen_stop_update_task(void)
 {
     if (s_main_screen_timer_handle != NULL)
@@ -296,6 +309,11 @@ void main_screen_stop_update_task(void)
 
 void main_screen_start_idle_detect(void)
 {
+    if (s_auto_wakeup_refreshing)
+    {
+        return;
+    }
+
     power_management_start_deepsleep_idle_detect();
 }
 

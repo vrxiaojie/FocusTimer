@@ -2,12 +2,8 @@
 #include <sys/lock.h>
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
 #include "freertos/task.h"
 
-#include "driver/gpio.h"
-
-#include "esp_check.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
 
@@ -57,7 +53,6 @@ void app_main(void)
 
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
-    ESP_ERROR_CHECK_WITHOUT_ABORT(rtc_interrupt_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
     sleep_sync_daily_record_on_midnight_wakeup();
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw96103_init());

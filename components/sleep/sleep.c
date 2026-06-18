@@ -56,6 +56,8 @@ typedef struct
     uint8_t end_minute;
 } power_sleep_period_t;
 
+static bool s_skip_next_pre_deepsleep_record_save = false;
+
 /* ==================== NVS 辅助 ==================== */
 
 static uint8_t nvs_read_u8_default(const char *key, uint8_t default_val)
@@ -231,16 +233,26 @@ static void pre_deepsleep_cb(void *user_data)
 
     (void)ble_set_advertising_enabled(false);
 
-    esp_err_t err = nvs_storage_save_daily_record();
-    if (err != ESP_OK)
+    bool save_record = !s_skip_next_pre_deepsleep_record_save;
+    s_skip_next_pre_deepsleep_record_save = false;
+
+    esp_err_t err = ESP_OK;
+    if (save_record)
     {
-        ESP_LOGE(TAG, "save daily record before deep sleep failed: %s", esp_err_to_name(err));
+        err = nvs_storage_save_daily_record();
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "save daily record before deep sleep failed: %s", esp_err_to_name(err));
+        }
     }
 
-    err = aw96103_enter_doze_mode();
-    if (err != ESP_OK)
+    if (aw96103_is_initialized())
     {
-        ESP_LOGW(TAG, "set aw96103 doze mode before deep sleep failed: %s", esp_err_to_name(err));
+        err = aw96103_enter_doze_mode();
+        if (err != ESP_OK)
+        {
+            ESP_LOGW(TAG, "set aw96103 doze mode before deep sleep failed: %s", esp_err_to_name(err));
+        }
     }
 
     err = stcc4_prepare_for_deepsleep();
@@ -363,10 +375,12 @@ void sleep_handle_rtc_wakeup(void)
         return;
     }
 
+    main_screen_set_auto_wakeup_refreshing(true);
     init_minimal_display_stack();
 
     esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
     (void)main_screen_refresh_once(1200);
+    main_screen_set_auto_wakeup_refreshing(false);
 
     _lock_acquire(&lvgl_api_lock);
     if (lvgl_display != NULL)
@@ -377,6 +391,7 @@ void sleep_handle_rtc_wakeup(void)
     vTaskDelay(pdMS_TO_TICKS(120));
 
     esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
+    s_skip_next_pre_deepsleep_record_save = true;
     power_management_enter_deepsleep(60 * 1000);
 }
 

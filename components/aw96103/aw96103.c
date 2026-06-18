@@ -147,6 +147,11 @@ esp_err_t aw96103_enter_doze_mode(void)
     return aw96103_set_mode(AW96103_CMD_DOZE_MODE);
 }
 
+bool aw96103_is_initialized(void)
+{
+    return s_started;
+}
+
 static void IRAM_ATTR gpio_isr_handler(void *arg)
 {
     uint32_t gpio_num = (uint32_t)(uintptr_t)arg;
