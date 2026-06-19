@@ -7,6 +7,7 @@
 #include "esp_timer.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
+#include "nvs.h"
 
 #include "max98357.h"
 #include "lvgl_user.h"
@@ -18,6 +19,11 @@
 
 #define POMODORO_SCREEN_UPDATE_MS 1000
 #define POMODORO_FLIP_CHECK_MS 1000
+#define POMODORO_NVS_NAMESPACE "pomodoro"
+#define NVS_KEY_FOCUS_MIN "focus_min"
+#define NVS_KEY_REST_MIN "rest_min"
+#define DEFAULT_FOCUS_TIME_MINUTES 25
+#define DEFAULT_REST_TIME_MINUTES 5
 
 static const char *TAG = "pomodoro_screen";
 static TaskHandle_t s_pomodoro_screen_update_task_handle = NULL;
@@ -36,7 +42,7 @@ typedef enum
 // 全局变量
 static RTC_FAST_ATTR pomodoro_state_t s_pomodoro_state = POMODORO_STATE_FOCUS;
 static RTC_FAST_ATTR bool s_is_paused = true;
-static RTC_FAST_ATTR uint16_t s_remaining_seconds = 25 * 60; // 默认25分钟
+static RTC_FAST_ATTR uint16_t s_remaining_seconds = DEFAULT_FOCUS_TIME_MINUTES * 60; // 默认25分钟
 static RTC_FAST_ATTR uint8_t s_focus_count = 0;
 static RTC_FAST_ATTR uint8_t s_nap_count = 0;
 static RTC_FAST_ATTR uint16_t s_focus_minutes = 0;
@@ -45,9 +51,8 @@ static RTC_FAST_ATTR char s_rtc_date[11] = {0}; // 保存 deep sleep 时的日�
 static bool s_waiting_transition_confirm = false;
 static bool s_timeout_message_pending = false;
 
-// 默认时间设置
-static const uint8_t FOCUS_TIME_MINUTES = 25;
-static const uint8_t REST_TIME_MINUTES = 5;
+static uint8_t s_focus_time_minutes = DEFAULT_FOCUS_TIME_MINUTES;
+static uint8_t s_rest_time_minutes = DEFAULT_REST_TIME_MINUTES;
 
 static portMUX_TYPE s_pomodoro_lock = portMUX_INITIALIZER_UNLOCKED;
 
@@ -56,9 +61,45 @@ static bool s_audio_task_running = false;
 static void pomodoro_notify_ui_task(void);
 static void pomodoro_apply_countdown_timer_state(bool should_run);
 
+static uint8_t pomodoro_nvs_read_u8_default(const char *key, uint8_t default_val)
+{
+    nvs_handle_t handle;
+    uint8_t value = default_val;
+
+    if (nvs_open(POMODORO_NVS_NAMESPACE, NVS_READONLY, &handle) == ESP_OK)
+    {
+        if (nvs_get_u8(handle, key, &value) != ESP_OK || value == 0U)
+        {
+            value = default_val;
+        }
+        nvs_close(handle);
+    }
+
+    return value;
+}
+
+static void pomodoro_reload_duration_settings(void)
+{
+    uint8_t focus_minutes = pomodoro_nvs_read_u8_default(NVS_KEY_FOCUS_MIN, DEFAULT_FOCUS_TIME_MINUTES);
+    uint8_t rest_minutes = pomodoro_nvs_read_u8_default(NVS_KEY_REST_MIN, DEFAULT_REST_TIME_MINUTES);
+
+    portENTER_CRITICAL(&s_pomodoro_lock);
+    uint16_t old_total_seconds = (uint16_t)(s_pomodoro_state == POMODORO_STATE_FOCUS ? s_focus_time_minutes : s_rest_time_minutes) * 60U;
+    bool at_stage_start = s_remaining_seconds == old_total_seconds;
+
+    s_focus_time_minutes = focus_minutes;
+    s_rest_time_minutes = rest_minutes;
+
+    if (at_stage_start)
+    {
+        s_remaining_seconds = (uint16_t)(s_pomodoro_state == POMODORO_STATE_FOCUS ? s_focus_time_minutes : s_rest_time_minutes) * 60U;
+    }
+    portEXIT_CRITICAL(&s_pomodoro_lock);
+}
+
 static uint16_t pomodoro_get_total_seconds_for_state(pomodoro_state_t state)
 {
-    return (uint16_t)(state == POMODORO_STATE_FOCUS ? FOCUS_TIME_MINUTES : REST_TIME_MINUTES) * 60U;
+    return (uint16_t)(state == POMODORO_STATE_FOCUS ? s_focus_time_minutes : s_rest_time_minutes) * 60U;
 }
 
 static uint16_t pomodoro_get_elapsed_minutes_for_state(pomodoro_state_t state, uint16_t remaining_seconds)
@@ -380,7 +421,7 @@ static void pomodoro_go_to_next_stage_locked(pomodoro_state_t *completed_state,
         }
         s_focus_minutes += elapsed;
         s_pomodoro_state = POMODORO_STATE_REST;
-        s_remaining_seconds = REST_TIME_MINUTES * 60;
+        s_remaining_seconds = (uint16_t)s_rest_time_minutes * 60U;
     }
     else
     {
@@ -390,7 +431,7 @@ static void pomodoro_go_to_next_stage_locked(pomodoro_state_t *completed_state,
         }
         s_rest_minutes += elapsed;
         s_pomodoro_state = POMODORO_STATE_FOCUS;
-        s_remaining_seconds = FOCUS_TIME_MINUTES * 60;
+        s_remaining_seconds = (uint16_t)s_focus_time_minutes * 60U;
     }
 }
 
@@ -399,6 +440,8 @@ static void pomodoro_timeout_message_confirm_cb(void *user_data)
     (void)user_data;
     pomodoro_state_t completed_state = POMODORO_STATE_FOCUS;
     uint16_t elapsed_minutes = 0;
+
+    pomodoro_reload_duration_settings();
 
     portENTER_CRITICAL(&s_pomodoro_lock);
     pomodoro_go_to_next_stage_locked(&completed_state, &elapsed_minutes, true);
@@ -434,7 +477,7 @@ static void update_pomodoro_labels_locked(void)
     pomodoro_state = s_pomodoro_state;
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
-    total_seconds = (pomodoro_state == POMODORO_STATE_FOCUS ? FOCUS_TIME_MINUTES : REST_TIME_MINUTES) * 60;
+    total_seconds = pomodoro_get_total_seconds_for_state(pomodoro_state);
     progress_percent = total_seconds > 0 ? (int32_t)((remaining_seconds * 100U) / total_seconds) : 0;
 
     (void)snprintf(time_text, sizeof(time_text), "%02d:%02d", remaining_seconds / 60, remaining_seconds % 60);
@@ -589,6 +632,7 @@ static void pomodoro_screen_update_task(void *arg)
 
 void pomodoro_screen_start_update_task(void)
 {
+    pomodoro_reload_duration_settings();
     pomodoro_sync_current_day_and_counts();
     s_pomodoro_screen_active = true;
 
@@ -685,6 +729,8 @@ void pomodoro_screen_toggle_pause(void)
 {
     bool should_run;
 
+    pomodoro_reload_duration_settings();
+
     portENTER_CRITICAL(&s_pomodoro_lock);
     if (s_waiting_transition_confirm)
     {
@@ -705,17 +751,19 @@ void pomodoro_screen_reset(void)
 {
     bool should_run;
 
+    pomodoro_reload_duration_settings();
+
     portENTER_CRITICAL(&s_pomodoro_lock);
     s_is_paused = true;
     s_waiting_transition_confirm = false;
     s_timeout_message_pending = false;
     if (s_pomodoro_state == POMODORO_STATE_FOCUS)
     {
-        s_remaining_seconds = FOCUS_TIME_MINUTES * 60;
+        s_remaining_seconds = (uint16_t)s_focus_time_minutes * 60U;
     }
     else
     {
-        s_remaining_seconds = REST_TIME_MINUTES * 60;
+        s_remaining_seconds = (uint16_t)s_rest_time_minutes * 60U;
     }
     should_run = pomodoro_should_countdown_run_locked();
     portEXIT_CRITICAL(&s_pomodoro_lock);
@@ -730,6 +778,8 @@ void pomodoro_screen_skip(void)
     pomodoro_state_t completed_state = POMODORO_STATE_FOCUS;
     uint16_t elapsed_minutes = 0;
     bool should_run;
+
+    pomodoro_reload_duration_settings();
 
     portENTER_CRITICAL(&s_pomodoro_lock);
     pomodoro_go_to_next_stage_locked(&completed_state, &elapsed_minutes, true);

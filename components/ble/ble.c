@@ -1,6 +1,9 @@
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <stdint.h>
 #include "esp_log.h"
+#include "esp_pm.h"
 #include "nvs_flash.h"
 
 #include "cJSON.h"
@@ -34,6 +37,11 @@
 #define DEFAULT_SLEEP_END_HOUR 6
 #define DEFAULT_SLEEP_END_MINUTE 0
 #define DEFAULT_CHARGE_THRESHOLD 90
+#define POMODORO_NVS_NAMESPACE "pomodoro"
+#define NVS_KEY_FOCUS_MIN "focus_min"
+#define NVS_KEY_REST_MIN "rest_min"
+#define DEFAULT_FOCUS_MIN 25
+#define DEFAULT_REST_MIN 5
 
 /* Device name advertised over BLE */
 #define BLE_DEVICE_NAME "FocusTimer"
@@ -73,11 +81,17 @@ static const ble_uuid128_t power_settings_chr_uuid =
     BLE_UUID128_INIT(0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
 
+/* Characteristic 6 (pomodoro duration JSON): 00000000-0000-0000-0000-0000-0000-0006 */
+static const ble_uuid128_t pomodoro_settings_chr_uuid =
+    BLE_UUID128_INIT(0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+
 static uint16_t current_day_chr_val_handle;
 static uint16_t history_chr_val_handle;
 static uint16_t datetime_set_chr_val_handle;
 static uint16_t send_history_chr_val_handle;
 static uint16_t power_settings_chr_val_handle;
+static uint16_t pomodoro_settings_chr_val_handle;
 
 static bool ble_connected;
 static uint16_t ble_conn_handle;
@@ -85,6 +99,9 @@ static uint8_t own_addr_type;
 static bool ble_synced;
 static bool ble_adv_enabled;
 static bool ble_inited;
+static esp_pm_lock_handle_t s_ble_cpu_lock;
+static esp_pm_lock_handle_t s_ble_sleep_lock;
+static bool s_ble_pm_locked;
 
 /* History notification subscription state */
 static bool history_chr_subscribed;
@@ -113,6 +130,11 @@ typedef struct {
     uint8_t charge_threshold;
 } ble_power_settings_t;
 
+typedef struct {
+    uint8_t focus_min;
+    uint8_t rest_min;
+} ble_pomodoro_settings_t;
+
 static void ble_notify_conn_state(bool connected)
 {
     if (s_conn_state_cb != NULL) {
@@ -134,35 +156,72 @@ static void ble_notify_power_settings_updated(void)
     }
 }
 
-static esp_err_t ble_stack_deinit(void)
+static esp_err_t ble_pm_lock_init(void)
 {
-    if (!ble_inited) {
-        ble_adv_enabled = false;
-        ble_synced = false;
-        ble_connected = false;
+    esp_err_t err;
+
+    if (s_ble_cpu_lock == NULL) {
+        err = esp_pm_lock_create(ESP_PM_CPU_FREQ_MAX, 0, "ble_cpu", &s_ble_cpu_lock);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "create BLE CPU PM lock failed: %s", esp_err_to_name(err));
+            return err;
+        }
+    }
+
+    if (s_ble_sleep_lock == NULL) {
+        err = esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "ble_sleep", &s_ble_sleep_lock);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "create BLE sleep PM lock failed: %s", esp_err_to_name(err));
+            return err;
+        }
+    }
+
+    return ESP_OK;
+}
+
+static esp_err_t ble_pm_lock_acquire(void)
+{
+    esp_err_t err;
+
+    if (s_ble_pm_locked) {
         return ESP_OK;
     }
 
-    ble_adv_enabled = false;
-
-    // Best-effort stop advertising / terminate connection.
-    (void)ble_stop();
-
-    int rc = nimble_port_stop();
-    if (rc != 0) {
-        ESP_LOGW(TAG, "nimble_port_stop failed: %d", rc);
+    err = ble_pm_lock_init();
+    if (err != ESP_OK) {
+        return err;
     }
 
-    nimble_port_deinit();
+    err = esp_pm_lock_acquire(s_ble_cpu_lock);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "acquire BLE CPU PM lock failed: %s", esp_err_to_name(err));
+        return err;
+    }
 
-    ble_inited = false;
-    ble_synced = false;
-    ble_connected = false;
-    ble_conn_handle = 0;
-    own_addr_type = 0;
+    err = esp_pm_lock_acquire(s_ble_sleep_lock);
+    if (err != ESP_OK) {
+        (void)esp_pm_lock_release(s_ble_cpu_lock);
+        ESP_LOGE(TAG, "acquire BLE sleep PM lock failed: %s", esp_err_to_name(err));
+        return err;
+    }
 
-    ESP_LOGI(TAG, "BLE stack deinitialized");
+    s_ble_pm_locked = true;
     return ESP_OK;
+}
+
+static void ble_pm_lock_release(void)
+{
+    if (!s_ble_pm_locked) {
+        return;
+    }
+
+    if (s_ble_sleep_lock != NULL) {
+        (void)esp_pm_lock_release(s_ble_sleep_lock);
+    }
+    if (s_ble_cpu_lock != NULL) {
+        (void)esp_pm_lock_release(s_ble_cpu_lock);
+    }
+    s_ble_pm_locked = false;
 }
 
 /* Forward declarations */
@@ -175,9 +234,12 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
 static int ble_handle_datetime_write(struct ble_gatt_access_ctxt *ctxt);
 static int ble_handle_send_history_write(struct ble_gatt_access_ctxt *ctxt);
 static int ble_handle_power_settings_write(struct ble_gatt_access_ctxt *ctxt);
+static int ble_handle_pomodoro_settings_write(struct ble_gatt_access_ctxt *ctxt);
 static esp_err_t ble_parse_datetime_json(const char *json, pcf85263a_datetime_t *datetime);
 static esp_err_t ble_parse_power_settings_json(const char *json, ble_power_settings_t *settings);
+static esp_err_t ble_parse_pomodoro_settings_json(const char *json, ble_pomodoro_settings_t *settings);
 static esp_err_t ble_get_power_settings_json(char *json_buf, size_t json_buf_size, size_t *json_len);
+static esp_err_t ble_get_pomodoro_settings_json(char *json_buf, size_t json_buf_size, size_t *json_len);
 void ble_store_config_init(void);
 
 static bool ble_json_get_int(const cJSON *object, const char *name, int *value)
@@ -202,12 +264,19 @@ static bool ble_json_get_string(const cJSON *object, const char *name, const cha
     return true;
 }
 
+static uint8_t ble_nvs_read_u8_default_from(const char *namespace_name, const char *key, uint8_t default_val);
+
 static uint8_t ble_nvs_read_u8_default(const char *key, uint8_t default_val)
+{
+    return ble_nvs_read_u8_default_from(POWER_MGMT_NVS_NAMESPACE, key, default_val);
+}
+
+static uint8_t ble_nvs_read_u8_default_from(const char *namespace_name, const char *key, uint8_t default_val)
 {
     nvs_handle_t handle;
     uint8_t value = default_val;
 
-    if (nvs_open(POWER_MGMT_NVS_NAMESPACE, NVS_READONLY, &handle) == ESP_OK) {
+    if (nvs_open(namespace_name, NVS_READONLY, &handle) == ESP_OK) {
         if (nvs_get_u8(handle, key, &value) != ESP_OK) {
             value = default_val;
         }
@@ -215,6 +284,26 @@ static uint8_t ble_nvs_read_u8_default(const char *key, uint8_t default_val)
     }
 
     return value;
+}
+
+static esp_err_t ble_nvs_write_pomodoro_settings(const ble_pomodoro_settings_t *settings)
+{
+    nvs_handle_t handle;
+
+    if (settings == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t err = nvs_open(POMODORO_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    err = nvs_set_u8(handle, NVS_KEY_FOCUS_MIN, settings->focus_min);
+    err |= nvs_set_u8(handle, NVS_KEY_REST_MIN, settings->rest_min);
+    err |= nvs_commit(handle);
+    nvs_close(handle);
+    return err;
 }
 
 static bool ble_parse_hhmm_string(const char *value, uint8_t *hour, uint8_t *minute)
@@ -333,6 +422,78 @@ static esp_err_t ble_get_power_settings_json(char *json_buf, size_t json_buf_siz
                        settings.low_power ? 1U : 0U,
                        settings.auto_sleep ? 1U : 0U,
                        settings.charge_threshold);
+    if (written < 0 || (size_t)written >= json_buf_size) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    *json_len = (size_t)written;
+    return ESP_OK;
+}
+
+static esp_err_t ble_parse_pomodoro_settings_json(const char *json, ble_pomodoro_settings_t *settings)
+{
+    cJSON *root = NULL;
+    int focus_min = 0;
+    int rest_min = 0;
+
+    if (json == NULL || settings == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    root = cJSON_Parse(json);
+    if (root == NULL) {
+        ESP_LOGW(TAG, "Invalid pomodoro settings JSON");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!ble_json_get_int(root, "focus_min", &focus_min) ||
+        !ble_json_get_int(root, "rest_min", &rest_min)) {
+        cJSON_Delete(root);
+        ESP_LOGW(TAG, "Pomodoro settings JSON missing required fields");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON_Delete(root);
+
+    if (focus_min <= 0 || focus_min > UINT8_MAX ||
+        rest_min <= 0 || rest_min > UINT8_MAX) {
+        ESP_LOGW(TAG, "Pomodoro settings value out of range");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    settings->focus_min = (uint8_t)focus_min;
+    settings->rest_min = (uint8_t)rest_min;
+    return ESP_OK;
+}
+
+static esp_err_t ble_get_pomodoro_settings_json(char *json_buf, size_t json_buf_size, size_t *json_len)
+{
+    ble_pomodoro_settings_t settings = {
+        .focus_min = ble_nvs_read_u8_default_from(POMODORO_NVS_NAMESPACE,
+                                                  NVS_KEY_FOCUS_MIN,
+                                                  DEFAULT_FOCUS_MIN),
+        .rest_min = ble_nvs_read_u8_default_from(POMODORO_NVS_NAMESPACE,
+                                                 NVS_KEY_REST_MIN,
+                                                 DEFAULT_REST_MIN),
+    };
+    int written = 0;
+
+    if (json_buf == NULL || json_len == NULL || json_buf_size == 0U) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (settings.focus_min == 0U) {
+        settings.focus_min = DEFAULT_FOCUS_MIN;
+    }
+    if (settings.rest_min == 0U) {
+        settings.rest_min = DEFAULT_REST_MIN;
+    }
+
+    written = snprintf(json_buf,
+                       json_buf_size,
+                       "{\"focus_min\":%u,\"rest_min\":%u}",
+                       settings.focus_min,
+                       settings.rest_min);
     if (written < 0 || (size_t)written >= json_buf_size) {
         return ESP_ERR_NO_MEM;
     }
@@ -514,6 +675,48 @@ static int ble_handle_power_settings_write(struct ble_gatt_access_ctxt *ctxt)
     return 0;
 }
 
+static int ble_handle_pomodoro_settings_write(struct ble_gatt_access_ctxt *ctxt)
+{
+    uint16_t payload_len = OS_MBUF_PKTLEN(ctxt->om);
+    char *json_buf = NULL;
+    ble_pomodoro_settings_t settings = {0};
+
+    if (payload_len == 0U) {
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    }
+
+    json_buf = calloc((size_t)payload_len + 1U, sizeof(char));
+    if (json_buf == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate pomodoro settings JSON buffer");
+        return BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
+
+    int rc = os_mbuf_copydata(ctxt->om, 0, payload_len, json_buf);
+    if (rc != 0) {
+        free(json_buf);
+        ESP_LOGE(TAG, "Failed to copy pomodoro settings payload: %d", rc);
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    esp_err_t err = ble_parse_pomodoro_settings_json(json_buf, &settings);
+    free(json_buf);
+    if (err != ESP_OK) {
+        return BLE_ATT_ERR_INVALID_PDU;
+    }
+
+    err = ble_nvs_write_pomodoro_settings(&settings);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to persist pomodoro settings: %s", esp_err_to_name(err));
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    ESP_LOGI(TAG,
+             "Pomodoro settings updated over BLE: focus_min=%u rest_min=%u",
+             settings.focus_min,
+             settings.rest_min);
+    return 0;
+}
+
 /*** Fragmented history data send via notifications ***/
 
 static void ble_send_history_fragments(void)
@@ -648,6 +851,12 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
                 .val_handle = &power_settings_chr_val_handle,
             }, {
+                /* Pomodoro duration settings JSON */
+                .uuid = &pomodoro_settings_chr_uuid.u,
+                .access_cb = gatt_access_cb,
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
+                .val_handle = &pomodoro_settings_chr_val_handle,
+            }, {
                 0, /* Terminator */
             },
         },
@@ -709,6 +918,18 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
             rc = os_mbuf_append(ctxt->om, json_buf, json_len);
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
+
+        if (attr_handle == pomodoro_settings_chr_val_handle) {
+            char json_buf[48];
+            size_t json_len = 0;
+            esp_err_t err = ble_get_pomodoro_settings_json(json_buf, sizeof(json_buf), &json_len);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to get pomodoro settings JSON: %s", esp_err_to_name(err));
+                return BLE_ATT_ERR_UNLIKELY;
+            }
+            rc = os_mbuf_append(ctxt->om, json_buf, json_len);
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+        }
         break;
 
     case BLE_GATT_ACCESS_OP_WRITE_CHR:
@@ -725,6 +946,10 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
 
         if (attr_handle == power_settings_chr_val_handle) {
             return ble_handle_power_settings_write(ctxt);
+        }
+
+        if (attr_handle == pomodoro_settings_chr_val_handle) {
+            return ble_handle_pomodoro_settings_write(ctxt);
         }
         break;
 
@@ -999,16 +1224,26 @@ esp_err_t ble_stop(void)
 esp_err_t ble_set_advertising_enabled(bool enabled)
 {
     if (!enabled) {
-        // Fully shutdown BLE stack to restore lowest light-sleep current.
-        return ble_stack_deinit();
+        ble_adv_enabled = false;
+
+        esp_err_t err = ble_stop();
+        ble_pm_lock_release();
+        return err;
+    }
+
+    esp_err_t err = ble_pm_lock_acquire();
+    if (err != ESP_OK) {
+        ble_adv_enabled = false;
+        return err;
     }
 
     ble_adv_enabled = true;
 
     if (!ble_inited) {
-        esp_err_t err = ble_init();
+        err = ble_init();
         if (err != ESP_OK) {
             ble_adv_enabled = false;
+            ble_pm_lock_release();
             return err;
         }
     }
@@ -1019,7 +1254,12 @@ esp_err_t ble_set_advertising_enabled(bool enabled)
     }
 
     if (!ble_connected) {
-        return ble_start_advertising();
+        err = ble_start_advertising();
+        if (err != ESP_OK) {
+            ble_adv_enabled = false;
+            ble_pm_lock_release();
+        }
+        return err;
     }
 
     return ESP_OK;
