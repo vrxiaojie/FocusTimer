@@ -167,23 +167,35 @@ static void lvgl_port_task(void *arg)
     }
 }
 
-void lvgl_user_init(esp_lcd_panel_handle_t panel_handle, esp_lcd_panel_io_handle_t io_handle)
+static void lvgl_user_init_common(esp_lcd_panel_handle_t panel_handle,
+                                  esp_lcd_panel_io_handle_t io_handle,
+                                  bool oneshot)
 {
     // 初始化 panel_buffer 为白色，避免启动时显示黑屏
     memset(panel_buffer, 0xFF, sizeof(panel_buffer));
 
-    // 屏幕分辨率为 168x384。
-    // 按前面的换算规则: 宽度168需要 (168/12)*3 = 42 Byte ；高度 384/2 = 192 个双行。
-    size_t full_sz = 42 * 192;                                      // 8064 Bytes
-    uint8_t *clear_buf = heap_caps_malloc(full_sz, MALLOC_CAP_DMA); // 最好放置在DMA可用内存中避免SPI报错
-    if (clear_buf)
+    if (!oneshot)
     {
-        memset(clear_buf, 0xFF, full_sz); // 0xFF(白色)，避免黑屏闪烁
-        esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, 168, 384, clear_buf);
-        free(clear_buf);
+        // 屏幕分辨率为 168x384。
+        // 按前面的换算规则: 宽度168需要 (168/12)*3 = 42 Byte ；高度 384/2 = 192 个双行。
+        size_t full_sz = 42 * 192;                                      // 8064 Bytes
+        uint8_t *clear_buf = heap_caps_malloc(full_sz, MALLOC_CAP_DMA); // 最好放置在DMA可用内存中避免SPI报错
+        if (clear_buf)
+        {
+            memset(clear_buf, 0xFF, full_sz); // 0xFF(白色)，避免黑屏闪烁
+            esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, 168, 384, clear_buf);
+            free(clear_buf);
+        }
     }
 
-    ESP_LOGI(TAG, "Initialize LVGL");
+    if (oneshot)
+    {
+        ESP_LOGI(TAG, "Initialize LVGL oneshot");
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Initialize LVGL");
+    }
     lv_init();
 
     if (s_lcd_flush_done_sem == NULL)
@@ -224,20 +236,33 @@ void lvgl_user_init(esp_lcd_panel_handle_t panel_handle, esp_lcd_panel_io_handle
     /* Register done callback */
     esp_lcd_panel_io_register_event_callbacks(io_handle, &cbs, lvgl_display);
 
-    ESP_LOGI(TAG, "Use esp_timer as LVGL tick timer");
-    const esp_timer_create_args_t lvgl_tick_timer_args = {
-        .callback = &increase_lvgl_tick,
-        .name = "lvgl_tick"};
-    esp_timer_handle_t lvgl_tick_timer = NULL;
-    ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, LVGL_TICK_PERIOD_MS * 1000));
+    if (!oneshot)
+    {
+        ESP_LOGI(TAG, "Use esp_timer as LVGL tick timer");
+        const esp_timer_create_args_t lvgl_tick_timer_args = {
+            .callback = &increase_lvgl_tick,
+            .name = "lvgl_tick"};
+        esp_timer_handle_t lvgl_tick_timer = NULL;
+        ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
+        ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, LVGL_TICK_PERIOD_MS * 1000));
 
-    ESP_LOGI(TAG, "Create LVGL task");
-    xTaskCreate(lvgl_port_task, "LVGL", 4 * 1024, NULL, 2, NULL);
+        ESP_LOGI(TAG, "Create LVGL task");
+        xTaskCreate(lvgl_port_task, "LVGL", 4 * 1024, NULL, 2, NULL);
+    }
 
     // Lock the mutex due to the LVGL APIs are not thread-safe
     _lock_acquire(&lvgl_api_lock);
     // 以384为宽，168为高，横屏
     lv_display_set_rotation(lvgl_display, LV_DISPLAY_ROTATION_90);
     _lock_release(&lvgl_api_lock);
+}
+
+void lvgl_user_init(esp_lcd_panel_handle_t panel_handle, esp_lcd_panel_io_handle_t io_handle)
+{
+    lvgl_user_init_common(panel_handle, io_handle, false);
+}
+
+void lvgl_user_init_oneshot(esp_lcd_panel_handle_t panel_handle, esp_lcd_panel_io_handle_t io_handle)
+{
+    lvgl_user_init_common(panel_handle, io_handle, true);
 }

@@ -30,4 +30,5 @@ typedef void (*aw96103_key_event_cb_t)(uint8_t key_index, bool pressed, void *us
 
 esp_err_t aw96103_init();
 esp_err_t aw96103_enter_doze_mode(void);
+bool aw96103_is_initialized(void);
 void aw96103_register_key_event_cb(aw96103_key_event_cb_t cb, void *user_ctx);

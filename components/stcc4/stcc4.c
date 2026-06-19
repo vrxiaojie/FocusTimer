@@ -1,4 +1,7 @@
 #include "stcc4.h"
+
+#include <stdbool.h>
+
 #include "esp_log.h"
 #include "sdkconfig.h"
 
@@ -7,6 +10,7 @@
 #define LOG_TAG "STCC4"
 
 static i2c_master_dev_handle_t stcc4_i2c_dev_handle = NULL;
+static bool stcc4_sleeping = true;
 TaskHandle_t stcc4_task_handle = NULL;
 QueueHandle_t stcc4_value_queue = NULL;
 
@@ -107,6 +111,7 @@ esp_err_t stcc4_start_continuous_measurement()
 {
     uint8_t buf[2] = {0x21, 0x8b};
     ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    stcc4_sleeping = false;
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 start continuous measurement");
 #endif
@@ -191,6 +196,7 @@ esp_err_t stcc4_measure_single_shot()
 {
     uint8_t buf[2] = {0x21, 0x9D};
     ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    stcc4_sleeping = false;
     vTaskDelay(pdMS_TO_TICKS(500));
     return ESP_OK;
 }
@@ -199,6 +205,7 @@ esp_err_t stcc4_enter_sleep_mode()
 {
     uint8_t buf[2] = {0x36, 0x50};
     ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    stcc4_sleeping = true;
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 enter sleep mode");
 #endif
@@ -208,7 +215,7 @@ esp_err_t stcc4_enter_sleep_mode()
 
 esp_err_t stcc4_prepare_for_deepsleep(void)
 {
-    if (stcc4_i2c_dev_handle == NULL)
+    if (stcc4_i2c_dev_handle == NULL || stcc4_sleeping)
     {
         return ESP_OK;
     }
@@ -220,6 +227,7 @@ esp_err_t stcc4_prepare_for_deepsleep(void)
         return err;
     }
 
+    stcc4_sleeping = true;
     vTaskDelay(pdMS_TO_TICKS(2));
     return ESP_OK;
 }
@@ -235,6 +243,7 @@ esp_err_t stcc4_exit_sleep_mode()
 
     i2c_master_execute_defined_operations(stcc4_i2c_dev_handle, i2c_ops, sizeof(i2c_ops) / sizeof(i2c_operation_job_t), -1);
     // i2c_master_transmit(stcc4_i2c_dev_handle, buf, 2, -1);
+    stcc4_sleeping = false;
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 exit sleep mode");
 #endif

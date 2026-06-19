@@ -22,6 +22,7 @@
 static const char *TAG = "main_screen_calls";
 static TaskHandle_t s_main_screen_update_task_handle = NULL;
 static esp_timer_handle_t s_main_screen_timer_handle = NULL;
+static bool s_auto_wakeup_refreshing = false;
 
 static const char *const s_weekday_text[] = {
     "星期日",
@@ -178,11 +179,9 @@ static void update_main_screen_labels(const STCC4_value_t *sensor_value)
     _lock_release(&lvgl_api_lock);
 }
 
-esp_err_t main_screen_refresh_once(uint32_t timeout_ms)
+esp_err_t main_screen_start_sensor_refresh(void)
 {
     STCC4_value_t queue_value = {0};
-
-    update_main_screen_date_labels(true);
 
     if (stcc4_task_handle == NULL)
     {
@@ -200,14 +199,49 @@ esp_err_t main_screen_refresh_once(uint32_t timeout_ms)
     }
 
     xTaskNotifyGive(stcc4_task_handle);
+    return ESP_OK;
+}
+
+static esp_err_t main_screen_refresh_once_internal(uint32_t timeout_ms, bool start_sensor_refresh)
+{
+    STCC4_value_t queue_value = {0};
+
+    if (start_sensor_refresh)
+    {
+        update_main_screen_date_labels(true);
+
+        esp_err_t err = main_screen_start_sensor_refresh();
+        if (err != ESP_OK)
+        {
+            return err;
+        }
+    }
+
+    if (stcc4_value_queue == NULL || stcc4_task_handle == NULL)
+    {
+        ESP_LOGW(TAG, "STCC4 queue/task not ready");
+        return ESP_ERR_INVALID_STATE;
+    }
+
     if (xQueueReceive(stcc4_value_queue, &queue_value, pdMS_TO_TICKS(timeout_ms)) != pdPASS)
     {
         ESP_LOGW(TAG, "Failed to receive fresh STCC4 data in time");
+        update_main_screen_date_labels(true);
         return ESP_ERR_TIMEOUT;
     }
 
     update_main_screen_labels(&queue_value);
     return ESP_OK;
+}
+
+esp_err_t main_screen_refresh_once(uint32_t timeout_ms)
+{
+    return main_screen_refresh_once_internal(timeout_ms, true);
+}
+
+esp_err_t main_screen_refresh_once_pending(uint32_t timeout_ms)
+{
+    return main_screen_refresh_once_internal(timeout_ms, false);
 }
 
 static void main_screen_update_task(void *arg)
@@ -224,6 +258,13 @@ static void main_screen_update_task(void *arg)
 
 void main_screen_start_update_task(void)
 {
+    if (s_auto_wakeup_refreshing)
+    {
+        update_main_screen_date_labels(false);
+        ESP_LOGD(TAG, "Main screen update task skipped during auto wakeup refresh");
+        return;
+    }
+
     if (stcc4_task_handle == NULL)
     {
         stcc4_start_measurement_task();
@@ -276,6 +317,11 @@ void main_screen_start_update_task(void)
     ESP_LOGI(TAG, "Main screen update task started");
 }
 
+void main_screen_set_auto_wakeup_refreshing(bool refreshing)
+{
+    s_auto_wakeup_refreshing = refreshing;
+}
+
 void main_screen_stop_update_task(void)
 {
     if (s_main_screen_timer_handle != NULL)
@@ -296,6 +342,11 @@ void main_screen_stop_update_task(void)
 
 void main_screen_start_idle_detect(void)
 {
+    if (s_auto_wakeup_refreshing)
+    {
+        return;
+    }
+
     power_management_start_deepsleep_idle_detect();
 }
 
