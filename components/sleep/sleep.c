@@ -301,15 +301,11 @@ static void init_minimal_display_stack(void)
     spi_shared_lock_init();
     ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(lcd_screen_init());
-    lvgl_user_init(panel_handle, io_handle);
+    lvgl_user_init_oneshot(panel_handle, io_handle);
 
     _lock_acquire(&lvgl_api_lock);
     create_screens();
     lv_scr_load(objects.main);
-    if (lvgl_display != NULL)
-    {
-        lv_refr_now(lvgl_display);
-    }
     _lock_release(&lvgl_api_lock);
 
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
@@ -364,8 +360,9 @@ void sleep_handle_rtc_wakeup(void)
     }
     ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(main_screen_start_sensor_refresh());
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
-    ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init_oneshot());
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_refresh_once());
     sleep_register_pre_deepsleep_cb();
 
@@ -379,7 +376,7 @@ void sleep_handle_rtc_wakeup(void)
     init_minimal_display_stack();
 
     esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
-    (void)main_screen_refresh_once(1200);
+    (void)main_screen_refresh_once_pending(1200);
     main_screen_set_auto_wakeup_refreshing(false);
 
     _lock_acquire(&lvgl_api_lock);
@@ -388,7 +385,7 @@ void sleep_handle_rtc_wakeup(void)
         lv_refr_now(lvgl_display);
     }
     _lock_release(&lvgl_api_lock);
-    vTaskDelay(pdMS_TO_TICKS(120));
+    vTaskDelay(pdMS_TO_TICKS(20));
 
     esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
     s_skip_next_pre_deepsleep_record_save = true;

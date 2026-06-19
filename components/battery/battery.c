@@ -140,7 +140,7 @@ static void battery_monitor_task(void *arg)
     }
 }
 
-esp_err_t battery_init(void)
+static esp_err_t battery_init_common(bool start_monitor_task)
 {
     aw32001_disable_watchdog();
     aw32001_enable_charge();
@@ -168,24 +168,37 @@ esp_err_t battery_init(void)
     s_battery_handle = adc_battery_estimation_create(&config);
     ESP_RETURN_ON_FALSE(s_battery_handle != NULL, ESP_FAIL, TAG, "adc_battery_estimation_create failed");
 
-    BaseType_t ok = xTaskCreate(
-        battery_monitor_task,
-        "battery_task",
-        BATTERY_TASK_STACK_SIZE,
-        NULL,
-        BATTERY_TASK_PRIORITY,
-        &s_battery_task_handle);
-
-    if (ok != pdPASS)
+    if (start_monitor_task)
     {
-        ESP_LOGE(TAG, "create battery task failed");
-        adc_battery_estimation_destroy(s_battery_handle);
-        s_battery_handle = NULL;
-        return ESP_FAIL;
+        BaseType_t ok = xTaskCreate(
+            battery_monitor_task,
+            "battery_task",
+            BATTERY_TASK_STACK_SIZE,
+            NULL,
+            BATTERY_TASK_PRIORITY,
+            &s_battery_task_handle);
+
+        if (ok != pdPASS)
+        {
+            ESP_LOGE(TAG, "create battery task failed");
+            adc_battery_estimation_destroy(s_battery_handle);
+            s_battery_handle = NULL;
+            return ESP_FAIL;
+        }
     }
 
     ESP_LOGI(TAG, "battery init done");
     return ESP_OK;
+}
+
+esp_err_t battery_init(void)
+{
+    return battery_init_common(true);
+}
+
+esp_err_t battery_init_oneshot(void)
+{
+    return battery_init_common(false);
 }
 
 esp_err_t battery_refresh_once(void)
